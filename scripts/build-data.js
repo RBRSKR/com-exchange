@@ -30,6 +30,9 @@ const events = (cfg.events || []).map((e, i) => {
   const { at, type, reason, ...payload } = e;
   return { id: String(i).padStart(5, '0'), at: kst(at, 'events[' + i + ']'), type, reason, payload };
 });
+// market.json is public: an event written ahead of time would leak (e.g. tomorrow's news). Refuse future events.
+const future = events.filter((e) => e.at > now + 10 * 60000);
+if (future.length) fail('미래 시각 이벤트가 있습니다 (#' + future.map((e) => +e.id).join(', #') + '). market.json은 공개 파일이라 미리 적으면 다른 사람이 볼 수 있어요. 지금 시각으로 적어 주세요.');
 const errs = E.validateGenesis(genesis);
 if (errs.length) fail('market.json 설정 오류: ' + errs.join(', '));
 
