@@ -256,6 +256,13 @@
       "code": "IFD",
       "vol": 0.96,
       "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 21:36:30",
+      "type": "news",
+      "code": "IFD",
+      "headline": "이프스 다이나믹스, 첫 로봇 상용화!",
+      "effect": 20
     }
   ],
   "notices": []
