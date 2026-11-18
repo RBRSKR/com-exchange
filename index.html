@@ -402,9 +402,9 @@ function viewHome(){
       <td class="hide-m">${sparkSVG(s)}</td><td class="hide-m num sub">${fmtCap(s.price*(s.shares||0))}</td></tr>`).join('')}
     </tbody></table></section>
     <div style="display:flex;flex-direction:column;gap:24px">
-    <section class="card"><div class="card-h"><h2>시장 뉴스</h2><span class="sub">최근 ${Math.min(8,sim.news.length)}건</span></div><div class="news scroll" style="max-height:480px">${newsItems(sim.news,8,true)}</div></section>
-    <section class="card"><div class="card-h"><h2>디스코드 공지용 시세</h2><button class="btn sm" id="copyD">복사</button></div>
-      <div class="card-b"><div class="sub">복사해서 디스코드 채널에 그대로 붙여넣습니다.</div><textarea class="copybox" readonly id="dtext">${esc(discordText())}</textarea></div></section></div></div>`;
+    <section class="card"><div class="card-h"><h2>시장 뉴스</h2><span class="sub">최근 ${Math.min(window.COM_STATIC?14:8,sim.news.length)}건</span></div><div class="news scroll" style="max-height:${window.COM_STATIC?820:480}px">${newsItems(sim.news,window.COM_STATIC?14:8,true)}</div></section>
+    ${window.COM_STATIC?'':`<section class="card"><div class="card-h"><h2>디스코드 공지용 시세</h2><button class="btn sm" id="copyD">복사</button></div>
+      <div class="card-b"><div class="sub">복사해서 디스코드 채널에 그대로 붙여넣습니다.</div><textarea class="copybox" readonly id="dtext">${esc(discordText())}</textarea></div></section>`}</div></div>`;
   h += `<div class="disclaim"><span>COM EXCHANGE는 시세 조회 전용 사이트입니다. COM 봇과 연동되어 있지 않으며, 잔액 조회·송금·자동 체결 기능이 없습니다. 매매와 입출금은 디스코드에서 사되가 직접 처리합니다.</span></div>`;
   return h;
 }
