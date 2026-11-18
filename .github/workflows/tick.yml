@@ -1,0 +1,40 @@
+name: 시세 1회 반영
+on:
+  workflow_call:
+    inputs:
+      wait:
+        type: boolean
+        default: true
+      tag:
+        type: string
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 다음 10분 정각까지 대기
+        if: ${{ inputs.wait }}
+        run: sleep $(( 600 - $(date +%s) % 600 + 15 ))
+      - name: 시세 계산
+        run: node scripts/build-data.js
+        env:
+          MARKET_SEED: ${{ secrets.MARKET_SEED }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+          name: site-${{ inputs.tag }}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/deploy-pages@v4
+        with:
+          artifact_name: site-${{ inputs.tag }}

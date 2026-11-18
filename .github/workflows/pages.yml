@@ -1,9 +1,12 @@
 name: 시세 갱신
 
+# 한 번 실행되면 약 1시간 동안 10분마다 사이트를 갱신하고,
+# 장(09:00~22:00 KST)이 아직 열려 있으면 스스로 다음 실행을 시작한다.
+# GitHub 예약 실행은 자주 늦거나 빠지므로, 아침 시작과 중간 끊김 대비용으로만 쓴다.
 on:
   schedule:
-    # 장중(09:00~22:00 KST = 00:00~13:00 UTC) 5분마다 실행. 10분 갱신이 GitHub 지연으로 늦어도 다음 실행에서 따라잡는다.
-    - cron: '*/5 0-13 * * *'
+    - cron: '50 23 * * *'        # 08:50 KST 시작
+    - cron: '15 0-12 * * *'      # 끊겼을 때 다시 잇기
   push:
     branches: [main]
   workflow_dispatch:
@@ -12,13 +15,14 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,20 +31,48 @@ jobs:
           node-version: 20
       - name: 가격 엔진 테스트
         run: node --test engine.test.js
-      - name: 시세 계산
-        run: node scripts/build-data.js
-        env:
-          MARKET_SEED: ${{ secrets.MARKET_SEED }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-  deploy:
-    needs: build
+  t1:
+    needs: test
+    uses: ./.github/workflows/tick.yml
+    with: { wait: false, tag: t1 }
+    secrets: inherit
+  t2:
+    needs: t1
+    uses: ./.github/workflows/tick.yml
+    with: { tag: t2 }
+    secrets: inherit
+  t3:
+    needs: t2
+    uses: ./.github/workflows/tick.yml
+    with: { tag: t3 }
+    secrets: inherit
+  t4:
+    needs: t3
+    uses: ./.github/workflows/tick.yml
+    with: { tag: t4 }
+    secrets: inherit
+  t5:
+    needs: t4
+    uses: ./.github/workflows/tick.yml
+    with: { tag: t5 }
+    secrets: inherit
+  t6:
+    needs: t5
+    uses: ./.github/workflows/tick.yml
+    with: { tag: t6 }
+    secrets: inherit
+  again:
+    needs: t6
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: 장이 열려 있으면 다음 실행 시작
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          H=$(TZ=Asia/Seoul date +%H); M=$(TZ=Asia/Seoul date +%M)
+          if [ "$H" -ge 8 ] && { [ "$H" -lt 22 ] || { [ "$H" -eq 22 ] && [ "$M" -lt 5 ]; }; }; then
+            gh api -X POST repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches -f ref=main
+            echo "다음 실행 시작"
+          else
+            echo "장 마감 시간이라 멈춤"
+          fi
