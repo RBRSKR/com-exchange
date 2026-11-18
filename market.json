@@ -5,7 +5,7 @@
     "close": "22:00",
     "everyMin": 30
   },
-  "dailyLimitPct": 15,
+  "dailyLimitPct": 30,
   "newsPerStockDay": 0.6,
   "stocks": [
     {
