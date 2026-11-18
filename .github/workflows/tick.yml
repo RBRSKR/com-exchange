@@ -14,13 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: 다음 15분 정각까지 대기
         if: ${{ inputs.wait }}
         run: sleep $(( 900 - $(date +%s) % 900 + 15 ))
+      # 기다린 뒤에 최신 main을 받아야 관리자 패널에서 바꾼 내용(뉴스·중지 등)이 이번 정각에 들어간다
+      - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: 시세 계산
         run: node scripts/build-data.js
         env:
