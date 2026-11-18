@@ -723,10 +723,18 @@ const DEFAULT_STOCKS=[
 /* ---------- data wiring ---------- */
 function onData(){ recompute(); render(); }
 let lastLoad=0;
+// live prices from the Cloudflare Worker (exact to the minute); GitHub's data.json is the backup
+const API_URL='https://com-exchange.sigeupcalc.workers.dev/api/data';
+async function fetchData(){
+  try{ const c=new AbortController(), tm=setTimeout(()=>c.abort(),8000);
+    const r=await fetch(API_URL+'?t='+Date.now(),{cache:'no-store',signal:c.signal}); clearTimeout(tm);
+    if(r.ok){ const d=await r.json(); if(d&&d.sim){ S.source='live'; return d; } } }catch(e){}
+  const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
+  S.source='backup'; return r.json();
+}
 async function loadStatic(){
   lastLoad=Date.now();
-  try{ const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
-    const d=await r.json(); S.genesis=d.genesis; S.notices=Array.isArray(d.notices)?d.notices:[]; S.sim=d.sim; S.events=[]; S.err=null; S.simErr=null; S.dataAt=d.generatedAt; render(); }
+  try{ const d=await fetchData(); S.genesis=d.genesis; S.notices=Array.isArray(d.notices)?d.notices:[]; S.sim=d.sim; S.events=[]; S.err=null; S.simErr=null; S.dataAt=d.generatedAt; render(); }
   catch(e){ if(!S.sim){ S.err='시세 데이터를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.'; render(); } }
 }
 async function init(){
@@ -752,7 +760,7 @@ async function init(){
 // clock + slot rollover (no writes: every viewer derives the same new prices locally)
 setInterval(()=>{
   $('kst').textContent = tKST(Date.now(),{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' KST';
-  if (window.COM_STATIC){ if (S.sim && Date.now() >= S.sim.nextUpdate+20000 && Date.now()-lastLoad > 15000) loadStatic(); if (S.sim && $('cd') && !S.sim.halted) $('cd').textContent = S.sim.nextUpdate>Date.now()?fmtLeft(S.sim.nextUpdate-Date.now()):'반영 중'; }
+  if (window.COM_STATIC){ if (S.sim && Date.now() >= S.sim.nextUpdate+3000 && Date.now()-lastLoad > 10000) loadStatic(); if (S.sim && $('cd') && !S.sim.halted) $('cd').textContent = S.sim.nextUpdate>Date.now()?fmtLeft(S.sim.nextUpdate-Date.now()):'반영 중'; }
   else if (S.sim && Date.now() >= S.sim.nextUpdate){ recompute(); if(!(S.route.name==='admin' && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render(); else renderTape(); toast('새 시세가 반영되었습니다.'); }
   else if (S.sim && $('cd') && !S.sim.halted){ $('cd').textContent = fmtLeft(S.sim.nextUpdate-Date.now()); const f=$('slotfill'); if(f) f.style.width=((Date.now()-S.sim.slotStart)/(S.sim.nextUpdate-S.sim.slotStart)*100).toFixed(2)+'%'; }
 }, 1000);

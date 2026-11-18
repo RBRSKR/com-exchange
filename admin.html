@@ -93,7 +93,11 @@ async function gh(method, body) {
   return r.json();
 }
 async function loadCfg() { const j = await gh('GET'); A.sha = j.sha; A.cfg = JSON.parse(b64dec(j.content)); }
-async function loadData() { try { const r = await fetch('data.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) A.data = await r.json(); } catch (e) {} }
+const API_URL = 'https://com-exchange.sigeupcalc.workers.dev/api/data';
+async function loadData() {
+  try { const r = await fetch(API_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) { const d = await r.json(); if (d && d.sim) { A.data = d; return; } } } catch (e) {}
+  try { const r = await fetch('data.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) A.data = await r.json(); } catch (e) {}
+}
 async function refresh() {
   A.loading = true; render();
   try { await Promise.all([loadCfg(), loadData()]); A.err = null; }
@@ -110,7 +114,7 @@ async function commit(label, mutate, clear) {
     const err = mutate(cfg); if (err) { toast(err); return; }
     const text = JSON.stringify(cfg, null, 2) + '\n';
     await gh('PUT', { message: '관리: ' + label, content: b64enc(text), sha: A.sha, branch: 'main' });
-    A.waitFrom = Date.now(); toast(label + ' 완료! 사이트 반영까지 1~2분 걸려요.');
+    A.waitFrom = Date.now(); toast(label + ' 완료! 30초쯤 뒤 사이트에 반영돼요.');
     (clear || []).forEach((id) => { const el = $(id); if (el) el.value = ''; });
     await loadCfg();
   } catch (e) {
@@ -158,8 +162,8 @@ function viewMain() {
   const cfg = A.cfg, halted = isHalted(), st = curStocks(), d = A.data;
   const pending = A.waitFrom && (!d || d.generatedAt < A.waitFrom);
   const evs = (cfg.events || []).map((e, i) => Object.assign({ i }, e)).reverse().slice(0, 40);
-  return `<h1>관리</h1><div class="sub">모든 변경은 market.json에 지금 시각으로 기록되고, 1~2분 뒤 사이트에 반영됩니다. 과거 가격은 바뀌지 않습니다.</div>
-  ${pending ? '<div class="banner">방금 바꾼 내용을 사이트에 반영하는 중이에요… (1~2분)</div>' : ''}
+  return `<h1>관리</h1><div class="sub">모든 변경은 market.json에 지금 시각으로 기록되고, 보통 30초 안에 사이트에 반영됩니다. 과거 가격은 바뀌지 않습니다.</div>
+  ${pending ? '<div class="banner">방금 바꾼 내용을 사이트에 반영하는 중이에요… (30초쯤)</div>' : ''}
   <div class="state"><div><span class="k">시장</span><span class="v ${halted ? 'up' : 'ok'}">${halted ? '중지됨' : '운영 중'}</span></div>
     ${st.map((s) => `<div><span class="k">${esc(s.code)}</span><span class="v num">${fmt(s.price)}</span></div>`).join('')}
     <div><span class="k">사이트 데이터</span><span class="v num" style="font-size:14px">${d ? esc(tKST(d.generatedAt)) : '-'}</span></div></div>
@@ -246,7 +250,7 @@ async function act(a) {
 }
 try { A.token = localStorage.getItem(TKEY); } catch (e) {}
 render(); if (A.token) refresh();
-setInterval(() => { if (A.token && A.cfg && A.waitFrom && !A.busy) loadData().then(() => { if (A.data && A.data.generatedAt >= A.waitFrom) { A.waitFrom = 0; render(); toast('사이트에 반영됐어요.'); } }); }, 20000);
+setInterval(() => { if (A.token && A.cfg && A.waitFrom && !A.busy) loadData().then(() => { if (A.data && A.data.generatedAt >= A.waitFrom + 25000) { A.waitFrom = 0; render(); toast('사이트에 반영됐어요.'); } }); }, 10000);
 </script>
 </body>
 </html>
