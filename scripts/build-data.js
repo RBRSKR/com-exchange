@@ -35,8 +35,14 @@ const genesis = {
   ...(schedule ? { schedule } : { periodMin: cfg.periodMin }),
   ...(cfg.newsPerStockDay !== undefined ? { newsPerStockDay: cfg.newsPerStockDay } : {}),
 };
+const sessionToSchedule = (ss, what) => {
+  const o = hm(ss.open), c = hm(ss.close), st = ss.everyMin;
+  if (!Number.isInteger(st) || st < 5 || o >= c) fail(what + ' session 설정이 잘못됐습니다 (open < close, everyMin 5 이상)');
+  const out = []; for (let m = o; m <= c; m += st) out.push(m); return out;
+};
 const events = (cfg.events || []).map((e, i) => {
-  const { at, type, reason, ...payload } = e;
+  let { at, type, reason, ...payload } = e;
+  if (type === 'schedule' && payload.session) payload = { schedule: sessionToSchedule(payload.session, 'events[' + i + ']') };
   return { id: String(i).padStart(5, '0'), at: kst(at, 'events[' + i + ']'), type, reason, payload };
 });
 // market.json is public: an event written ahead of time would leak (e.g. tomorrow's news). Refuse future events.
@@ -57,7 +63,7 @@ const sim = {
 };
 const out = {
   generatedAt: now,
-  genesis: { start: genesis.start, schedule: genesis.schedule, periodMin: genesis.periodMin, dailyLimitPct: genesis.dailyLimitPct },
+  genesis: { start: genesis.start, schedule: r.schedule || genesis.schedule, periodMin: genesis.periodMin, dailyLimitPct: genesis.dailyLimitPct },
   notices: (cfg.notices || []).map((n, i) => ({ id: 'n' + i, title: String(n.title || ''), body: String(n.body || ''), pinned: !!n.pinned, at: kst(n.at || cfg.start, 'notices[' + i + ']') })).sort((a, b) => b.at - a.at),
   sim,
 };

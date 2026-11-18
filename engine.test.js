@@ -204,3 +204,25 @@ test('장중 30분 갱신 + 뉴스 빈도 조절: 하루 뉴스 수가 목표 �
   assert.ok(gaps.length > 10 && Math.min(...gaps) >= 4, 'story gap hours min ' + Math.min(...gaps));
   r.stocks.forEach((s) => { assert.equal(s.shares, 10000); s.history.slice(1).forEach((h) => { const m = (h.t + 9 * 3600000) % DAY / 60000; assert.ok(m >= 540 && m <= 1320 && m % 30 === 0); }); });
 });
+
+test('갱신 간격을 중간에 바꿔도 지난 가격은 그대로, 이후는 새 간격', () => {
+  const g = G(); delete g.periodMin;
+  g.schedule = []; for (let m = 540; m <= 1320; m += 30) g.schedule.push(m);
+  g.newsPerStockDay = 0.6;
+  const ten = []; for (let m = 540; m <= 1320; m += 10) ten.push(m);
+  const change = START + 2 * DAY + (15 * 60 + 40) * MIN; // day 3, 15:40 KST
+  const ev = [{ id: 'sc', at: change, type: 'schedule', payload: { schedule: ten } }];
+  const before = E.simulate(g, [], change), after = E.simulate(g, ev, START + 12 * DAY);
+  for (const s of before.stocks) {
+    const a = after.stocks.find((x) => x.code === s.code);
+    assert.deepEqual(a.history.slice(0, s.history.length), s.history, s.code + ' history before change must not move');
+    const later = a.history.filter((h) => h.t > change);
+    assert.ok(later.length > 70 * 9, 'many 10-min updates');
+    later.forEach((h) => { const m = (h.t + 9 * 3600000) % DAY / 60000; assert.ok(m % 10 === 0 && m >= 540 && m <= 1320); });
+  }
+  assert.deepEqual(after.news.filter((n) => n.t <= change), before.news.filter((n) => n.t <= change));
+  const perDay = after.news.filter((n) => n.t > change).length / (9.3 * g.stocks.length);
+  assert.ok(perDay > 0.3 && perDay < 0.9, 'news per stock per day ' + perDay.toFixed(2));
+  assert.deepEqual(after.schedule, ten);
+  assert.equal(E.simulate(g, ev, change - 1).nextUpdate, START + 2 * DAY + (15 * 60 + 50) * MIN); // first 10-min slot after the change
+});

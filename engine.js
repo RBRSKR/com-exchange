@@ -176,15 +176,22 @@
     // update boundaries: fixed KST times of day (schedule) or every periodMin from start
     const bounds = [];
     let nextB = null;
+    // schedule changes ("지금부터 간격 변경"): a boundary uses the schedule in effect just before it, so past boundaries never move
+    const validSched = (a) => Array.isArray(a) && a.length && a.length <= 288 && a.every((m) => Number.isInteger(m) && m >= 0 && m < 1440) && new Set(a).size === a.length;
+    const schedChanges = (events || []).filter((e) => e && e.type === 'schedule' && isNum(e.at) && e.at >= genesis.start && e.payload && validSched(e.payload.schedule))
+      .slice().sort((a, b) => (a.at - b.at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((e) => ({ at: e.at, set: new Set(e.payload.schedule), len: e.payload.schedule.length }));
+    const sched0 = genesis.schedule ? { at: -Infinity, set: new Set(genesis.schedule), len: genesis.schedule.length } : null;
+    const schedAt = (b) => { let cur = sched0; for (const c of schedChanges) { if (c.at < b) cur = c; else break; } return cur; };
     (function gen() {
       const until = now;
       if (genesis.schedule) {
-        const mins = genesis.schedule.slice().sort((a, b) => a - b);
+        const allMins = [...new Set([...genesis.schedule, ...schedChanges.flatMap((c) => [...c.set])])].sort((a, b) => a - b);
         for (let d = kstDay(genesis.start); ; d++) {
           const base = d * DAY - KST_OFFSET;
-          for (const m of mins) {
+          for (const m of allMins) {
             const b = base + m * MIN;
             if (b <= genesis.start) continue;
+            if (!schedAt(b).set.has(m)) continue;
             if (b > until) { nextB = b; return; }
             bounds.push(b);
           }
@@ -198,9 +205,9 @@
 
     const news = [];
     // news frequency: optional target of news per stock per day, spread over however many updates a day has
-    const perDay = genesis.schedule ? genesis.schedule.length : Math.max(1, Math.round(1440 / genesis.periodMin));
-    const pScale = isNum(genesis.newsPerStockDay) && genesis.newsPerStockDay >= 0 ? Math.min(1, genesis.newsPerStockDay / ((NEWS_P.story + NEWS_P.single) * perDay)) : 1;
-    const storyGap = isNum(genesis.newsPerStockDay) ? Math.max(1, Math.ceil(perDay / 3)) : 1; // updates between 예고 and 결과
+    const perDayAt = (b) => genesis.schedule ? schedAt(b).len : Math.max(1, Math.round(1440 / genesis.periodMin));
+    const pScaleAt = (b) => isNum(genesis.newsPerStockDay) && genesis.newsPerStockDay >= 0 ? Math.min(1, genesis.newsPerStockDay / ((NEWS_P.story + NEWS_P.single) * perDayAt(b))) : 1;
+    const storyGapAt = (b) => isNum(genesis.newsPerStockDay) ? Math.max(1, Math.ceil(perDayAt(b) / 3)) : 1; // updates between 예고 and 결과
     const r4 = (x) => Math.round(x * 10000) / 10000;
     const fill = (tpl, s) => tpl.split('{n}').join(s.name);
     const span = (key, [a, b]) => a + unitRand(seed, key) * (b - a);
@@ -213,7 +220,8 @@
       if (s.history) s.history.push(headline ? { t, p: s.price, k: kind, r: rate, n: headline } : { t, p: s.price, k: kind, r: rate });
     }
     // deterministic news roll for stock s at scheduled update number k
-    function rollNews(s, c, k) {
+    function rollNews(s, c, k, B) {
+      const pScale = pScaleAt(B), storyGap = storyGapAt(B);
       const T = NEWS[c] || NEWS._;
       const st = s.story;
       if (st) {
@@ -285,6 +293,10 @@
           publish(s, e.at, { kind: 'admin', eff: r4(p.effect), headline: h });
           return null;
         }
+        case 'schedule': {
+          if (!validSched(p.schedule)) return 'bad schedule';
+          return null; // takes effect through the boundary list above
+        }
         case 'list': {
           if (!validStock(p)) return 'bad stock';
           if (stocks.has(p.code)) return 'code exists';
@@ -301,7 +313,7 @@
       drain(B); // events strictly before boundary
       if (!halted) order.forEach((c) => {
         const s = stocks.get(c); if (s.listedAt >= B) return;
-        const k = i + 1, item = rollNews(s, c, k);
+        const k = i + 1, item = rollNews(s, c, k, B);
         const rate = r4(randomRate(seed, c + ':' + k, s.vol) + (item ? item.eff : 0));
         move(s, rate, B, item ? 'news' : 'auto', item && item.headline);
         if (item) publish(s, B, item);
@@ -320,6 +332,7 @@
     });
     return {
       stocks: list, halted, applied, skipped, news: news.reverse(),
+      schedule: genesis.schedule ? [...schedAt(now + 1).set].sort((a, b) => a - b) : null,
       slot: lastSlot, slotStart: lastSlot ? bounds[lastSlot - 1] : genesis.start,
       nextUpdate: nextB, periodMs: nextB - (lastSlot ? bounds[lastSlot - 1] : genesis.start), dailyLimitPct: L,
     };
