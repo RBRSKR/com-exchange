@@ -210,7 +210,12 @@
     const news = F ? F.news.slice() : [];
     // news frequency: optional target of news per stock per day, spread over however many updates a day has
     const perDayAt = (b) => genesis.schedule ? schedAt(b).len : Math.max(1, Math.round(1440 / genesis.periodMin));
-    const pScaleAt = (b) => isNum(genesis.newsPerStockDay) && genesis.newsPerStockDay >= 0 ? Math.min(1, genesis.newsPerStockDay / ((NEWS_P.story + NEWS_P.single) * perDayAt(b))) : 1;
+    // news frequency changes ("지금부터 뉴스 빈도 변경"): like schedule changes, only boundaries after the change use the new rate
+    const validRate = (x) => isNum(x) && x >= 0 && x <= 10;
+    const rateChanges = (events || []).filter((e) => e && e.type === 'news_rate' && isNum(e.at) && e.at >= genesis.start && e.payload && validRate(e.payload.perStockDay))
+      .slice().sort((a, b) => (a.at - b.at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const rateAt = (b) => { let r = genesis.newsPerStockDay; for (const c of rateChanges) { if (c.at < b) r = c.payload.perStockDay; else break; } return r; };
+    const pScaleAt = (b) => { const r = rateAt(b); return isNum(r) && r >= 0 ? Math.min(1, r / ((NEWS_P.story + NEWS_P.single) * perDayAt(b))) : 1; };
     const storyGapAt = (b) => isNum(genesis.newsPerStockDay) ? Math.max(1, Math.ceil(perDayAt(b) / 3)) : 1; // updates between 예고 and 결과
     const r4 = (x) => Math.round(x * 10000) / 10000;
     const fill = (tpl, s) => tpl.split('{n}').join(s.name);
@@ -296,6 +301,10 @@
           move(s, r4(p.effect), e.at, 'news', h);
           publish(s, e.at, { kind: 'admin', eff: r4(p.effect), headline: h });
           return null;
+        }
+        case 'news_rate': {
+          if (!validRate(p.perStockDay)) return 'bad news rate';
+          return null; // takes effect through rateAt above
         }
         case 'schedule': {
           if (!validSched(p.schedule)) return 'bad schedule';

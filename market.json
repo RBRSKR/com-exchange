@@ -208,6 +208,54 @@
       "type": "set_vol",
       "code": "IFD",
       "vol": 0.32
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "news_rate",
+      "perStockDay": 1.8,
+      "reason": "뉴스 3배 (회사당 하루 0.6 → 1.8개)"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "CCI",
+      "vol": 0.75,
+      "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "MUG",
+      "vol": 0.54,
+      "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "SAI",
+      "vol": 1.11,
+      "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "DER",
+      "vol": 0.93,
+      "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "RIM",
+      "vol": 0.69,
+      "reason": "움직임 3배"
+    },
+    {
+      "at": "2026-11-18 19:08:36",
+      "type": "set_vol",
+      "code": "IFD",
+      "vol": 0.96,
+      "reason": "움직임 3배"
     }
   ],
   "notices": []

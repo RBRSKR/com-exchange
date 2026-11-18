@@ -256,3 +256,20 @@ test('체크포인트에서 이어 계산해도 처음부터 계산한 것과 �
   const res2 = E.simulate(g, ev, now, { from: JSON.parse(JSON.stringify(st)) });
   assert.deepEqual(strip(res2), strip(full));
 });
+
+test('뉴스 빈도를 중간에 바꿔도 지난 뉴스·가격은 그대로, 이후는 새 빈도', () => {
+  const g = G(); delete g.periodMin;
+  g.schedule = []; for (let m = 540; m <= 1320; m += 5) g.schedule.push(m);
+  g.newsPerStockDay = 0.6; g.dailyLimitPct = 30;
+  const change = START + 3 * DAY + (19 * 60 + 8) * MIN;
+  const ev = [{ id: 'r', at: change, type: 'news_rate', payload: { perStockDay: 1.8 } }];
+  const before = E.simulate(g, [], change), after = E.simulate(g, ev, START + 40 * DAY);
+  for (const s of before.stocks) assert.deepEqual(after.stocks.find((x) => x.code === s.code).history.slice(0, s.history.length), s.history);
+  assert.deepEqual(after.news.filter((n) => n.t <= change), before.news.filter((n) => n.t <= change));
+  const rate = after.news.filter((n) => n.t > change).length / ((40 - 3.4) * g.stocks.length);
+  assert.ok(rate > 1.3 && rate < 2.4, 'news per stock per day after change ' + rate.toFixed(2));
+  // checkpoints still agree with a full run
+  let st = null; for (let d = 1; d <= 40; d++) st = E.simulate(g, ev, START + d * DAY, { from: st, snapshot: true }).state;
+  const res = E.simulate(g, ev, START + 40 * DAY + 13 * 3600000, { from: st }), full = E.simulate(g, ev, START + 40 * DAY + 13 * 3600000);
+  assert.deepEqual(res.news, full.news); assert.deepEqual(res.stocks.map((s) => s.price), full.stocks.map((s) => s.price));
+});
