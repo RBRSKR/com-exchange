@@ -139,6 +139,13 @@ textarea{resize:vertical;min-height:72px}
 .nw .kd{font:600 12px var(--mono)}
 .nw .hl{grid-column:1/-1;font-size:14px;line-height:1.5}
 .nw .fx{margin-left:auto;font:500 12px var(--mono)}
+.card-h{flex-wrap:wrap}
+.seg button{white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--line)}
+.lg{display:flex;align-items:center;gap:8px;background:none;border:0;border-right:1px solid var(--line);padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text)}
+.lg i{width:12px;height:3px;display:inline-block}
+.lg.off{opacity:.35}
+.lg:hover{background:var(--bg2)}
 .minis{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line)}
 .mini{padding:12px 12px 4px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);cursor:pointer;min-width:0}
 .mini:hover{background:var(--bg2)}
@@ -328,6 +335,32 @@ function drawChart(s, boxId, dec, opt){
   hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move); hit.addEventListener('pointerleave', leave);
 }
 
+const PALETTE=['#f0b23e','#3fc1c9','#b48cff','#ff7eb6','#8bd450','#5aa9ff','#d9d9d9','#ff9f43'];
+const lineColor=(k)=>PALETTE[k%PALETTE.length];
+function drawMulti(){
+  const box=$('multichart'); if(!box||!S.sim) return;
+  const W=box.clientWidth||600, H=box.clientWidth<520?260:340, pl=8, pr=56, pt=16, pb=26, rng=S.mrange||'1D';
+  const lines=S.sim.stocks.map((st,k)=>{ const ser=seriesFor(st,rng), b=ser[0].p||1; return { st, k, b, pts:ser.map((x)=>({t:x.t,p:x.p,v:(x.p/b-1)*100})) }; });
+  const vis=lines.filter((l)=>!(S.hidden||{})[l.st.code]); const use=vis.length?vis:lines;
+  const t0=Math.min(...use.map((l)=>l.pts[0].t)), t1=Math.max(...use.map((l)=>l.pts[l.pts.length-1].t)), ts=Math.max(1,t1-t0);
+  let mn=Math.min(0,...use.flatMap((l)=>l.pts.map((x)=>x.v))), mx=Math.max(0,...use.flatMap((l)=>l.pts.map((x)=>x.v)));
+  const pad=Math.max(0.5,(mx-mn)*0.12); mn-=pad; mx+=pad;
+  const X=(t)=>pl+(t-t0)/ts*(W-pl-pr), Y=(v)=>pt+(1-(v-mn)/(mx-mn))*(H-pt-pb);
+  let g=''; for(let i=0;i<=4;i++){ const v=mn+(mx-mn)*i/4, y=Y(v); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${W-pr+8}" y="${y+4}" fill="var(--dim)" font-size="11" font-family="IBM Plex Mono">${(v>0?'+':'')+v.toFixed(1)}%</text>`; }
+  g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-opacity=".5"/>`;
+  for(let i=0;i<=3;i++){ const t=t0+ts*i/3; const lab=ts<2*864e5?tKST(t,{hour:'2-digit',minute:'2-digit',hour12:false}):tKST(t,{month:'numeric',day:'numeric'}); g+=`<text x="${X(t)}" y="${H-7}" fill="var(--dim)" font-size="11" text-anchor="${i===0?'start':i===3?'end':'middle'}">${esc(lab)}</text>`; }
+  const paths=use.map((l)=>{ let d=''; l.pts.forEach((x,i)=>{ d+= i? `L${X(x.t).toFixed(1)},${Y(l.pts[i-1].v).toFixed(1)}L${X(x.t).toFixed(1)},${Y(x.v).toFixed(1)}` : `M${X(x.t).toFixed(1)},${Y(x.v).toFixed(1)}`; });
+    const last=l.pts[l.pts.length-1]; return `<path d="${d}" fill="none" stroke="${lineColor(l.k)}" stroke-width="2" stroke-linejoin="round"/><circle cx="${X(last.t)}" cy="${Y(last.v)}" r="3" fill="${lineColor(l.k)}"/>`; }).join('');
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="height:${H}px;display:block;width:100%" role="img" aria-label="전체 회사 주가 비교">${g}${paths}<line id="mx" y1="${pt}" y2="${H-pb}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/><rect x="${pl}" y="0" width="${W-pl-pr}" height="${H}" fill="transparent" id="mhit"/></svg><div class="tip" id="mtip"></div>`;
+  const svg=box.querySelector('svg'), tip=$('mtip'), vx=$('mx');
+  const at=(l,t)=>{ let r=l.pts[0]; for(const x of l.pts){ if(x.t<=t) r=x; else break; } return r; };
+  const mv=(ev)=>{ const r=svg.getBoundingClientRect(); const t=t0+Math.min(1,Math.max(0,((ev.clientX-r.left)*(W/r.width)-pl)/(W-pl-pr)))*ts; const x=X(t);
+    vx.setAttribute('x1',x); vx.setAttribute('x2',x); vx.setAttribute('visibility','visible');
+    const rows=use.map((l)=>({l,pt:at(l,t)})).sort((a,b)=>b.pt.v-a.pt.v).map(({l,pt})=>`<div style="display:flex;gap:8px;align-items:center"><i style="width:10px;height:3px;background:${lineColor(l.k)};display:inline-block"></i><b style="min-width:34px">${l.st.code}</b><span class="num" style="min-width:52px;text-align:right">${fmt(pt.p)}</span><span class="num ${dir(pt.v)}">${(pt.v>0?'+':'')+pt.v.toFixed(2)}%</span></div>`).join('');
+    tip.innerHTML=`<div class="sub" style="margin-bottom:4px">${esc(tKST(t))}</div>${rows}`; tip.style.display='block';
+    const left=x*(r.width/W); tip.style.left=Math.min(Math.max(left,90),r.width-90)+'px'; tip.style.top='120px'; };
+  $('mhit').addEventListener('pointermove',mv); $('mhit').addEventListener('pointerdown',mv); $('mhit').addEventListener('pointerleave',()=>{ tip.style.display='none'; vx.setAttribute('visibility','hidden'); });
+}
 function drawMinis(){ S.sim.stocks.forEach((s)=>{ if($('mc-'+s.code)) drawChart(s,'mc-'+s.code,0,{h:130,range:S.mrange||'1D',pr:46}); }); }
 function drawCandles(s, box){
   const W = box.clientWidth || 600, H = box.clientWidth < 520 ? 230 : 300, pl=8, pr=62, pt=16, pb=26;
@@ -391,11 +424,12 @@ function viewHome(){
   if (blk) return h + blk;
   const up = sim.stocks.filter((s)=>s.change>0).length, dn = sim.stocks.filter((s)=>s.change<0).length;
   const left = Math.max(0, sim.nextUpdate - Date.now());
-  const ix = computeIndex();
-  if (ix) h += `<section class="card" style="margin-top:24px"><div class="card-h"><div><div class="sub">COM 종합지수 · 시가총액 가중 · 개장일 1,000 기준</div>
-      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:4px"><span class="num" style="font-size:28px;font-weight:500">${fmtD(ix.price,2)}</span><span class="num ${dir(ix.change)}" style="font-weight:600">${arrow(ix.change)} ${fmtD(Math.abs(ix.change),2)} (${pct(ix.changePct)})</span></div></div>
-</div>
-    <div style="padding:4px 4px 0"><div class="chart" id="ixchart"></div></div></section>`;
+  const mr = S.mrange||'1D';
+  h += `<section class="card" style="margin-top:24px"><div class="card-h"><div><h2>전체 회사 주가 비교</h2><div class="sub">기간 시작 가격을 0%로 맞춘 등락률 · 선 위에 대면 가격이 보여요</div></div>
+      <div class="seg" id="mseg">${['1D','1W','1M','ALL'].map((r)=>`<button data-m="${r}" class="${mr===r?'on':''}">${{'1D':'1일','1W':'1주','1M':'1개월','ALL':'전체'}[r]}</button>`).join('')}</div></div>
+    <div class="legend" id="mlegend">${sim.stocks.map((st,k)=>{ const ser=seriesFor(st,mr), b=ser[0].p, cp=b?(st.price/b-1)*100:0, off=(S.hidden||{})[st.code];
+      return `<button class="lg${off?' off':''}" data-lg="${st.code}"><i style="background:${lineColor(k)}"></i><b>${st.code}</b><span class="num">${fmt(st.price)}</span><span class="num ${dir(cp)}">${pct(cp)}</span></button>`; }).join('')}</div>
+    <div style="padding:0 4px 4px"><div class="chart" id="multichart"></div></div></section>`;
   h += `<div class="strip">
     <div><span class="k">마지막 갱신</span><span class="v num">${esc(tKST(sim.slotStart,{hour:'2-digit',minute:'2-digit',hour12:false}))}</span></div>
     <div><span class="k">다음 갱신</span><span class="v num" id="cd">${sim.halted?'중지':left>0?fmtLeft(left):'반영 중'}</span></div>
@@ -413,10 +447,6 @@ function viewHome(){
     <section class="card"><div class="card-h"><h2>시장 뉴스</h2><span class="sub">최근 ${Math.min(window.COM_STATIC?14:8,sim.news.length)}건</span></div><div class="news scroll" style="max-height:${window.COM_STATIC?820:480}px">${newsItems(sim.news,window.COM_STATIC?14:8,true)}</div></section>
     ${window.COM_STATIC?'':`<section class="card"><div class="card-h"><h2>디스코드 공지용 시세</h2><button class="btn sm" id="copyD">복사</button></div>
       <div class="card-b"><div class="sub">복사해서 디스코드 채널에 그대로 붙여넣습니다.</div><textarea class="copybox" readonly id="dtext">${esc(discordText())}</textarea></div></section>`}</div></div>`;
-  const mr = S.mrange||'1D';
-  h += `<section class="card" style="margin-top:24px"><div class="card-h"><h2>회사별 주가 그래프</h2><div class="seg" id="mseg">${['1D','1W','1M'].map((r)=>`<button data-m="${r}" class="${mr===r?'on':''}">${{'1D':'1일','1W':'1주','1M':'1개월'}[r]}</button>`).join('')}</div></div>
-    <div class="minis">${sim.stocks.map((s)=>{ const first=seriesFor(s,mr)[0].p, ch=s.price-first, cp=first?(s.price/first-1)*100:0;
-      return `<div class="mini" data-go="${s.code}"><div class="mh"><div style="min-width:0"><span class="tk" style="font-size:14px">${s.code}</span> <span class="nm">${esc(s.name)}</span></div><div style="text-align:right;white-space:nowrap"><span class="num">${fmt(s.price)}</span> <span class="num ${dir(ch)}" style="font-size:12px">${pct(cp)}</span></div></div><div class="chart" id="mc-${s.code}"></div></div>`; }).join('')}</div></section>`;
   h += `<div class="disclaim"><span>COM EXCHANGE는 시세 조회 전용 사이트입니다. COM 봇과 연동되어 있지 않으며, 잔액 조회·송금·자동 체결 기능이 없습니다. 매매와 입출금은 디스코드에서 사되가 직접 처리합니다.</span></div>`;
   return h;
 }
@@ -601,8 +631,7 @@ function render(){
     + `<div class="foot">COM EXCHANGE v0.2 · 커뮤니티용 가상 증권거래소 · 모든 종목은 실제 기업이 아닌 가상 종목입니다.<br>가격은 종목별 설정 범위의 균등 난수와 시장 뉴스로 ${schedLabel()||'정해진 시각에 갱신'}되는 공통 규칙에 따라 계산되며, 실제 화폐·투자 상품과 무관합니다. 시각은 한국 표준시(KST) 기준입니다.</div>`;
   setStatus(); renderTape(); bind();
   if (r.name==='stock' && stock(r.code)) drawChart(stock(r.code));
-  if (r.name==='home' && $('ixchart')) { const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); }
-  if (r.name==='home' && S.sim) drawMinis();
+  if (r.name==='home' && $('multichart')) drawMulti();
   if (keep) restoreInputs(keep);
 }
 const INPUTS=['wCode','wEff','wHead','aReason','pCode','pPrice','pReason','eCode','eName','eSector','eVol','eDesc','lCode','lName','lSector','lInit','lVol','lDesc','nTitle','nBody','nPin','tSide','tQty'];
@@ -616,6 +645,7 @@ function bind(){
   const setup=$('setup'); if(setup) setup.onclick=setupMarket;
   document.querySelectorAll('#rseg button').forEach((b)=>b.onclick=()=>{ S.range=b.dataset.r; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
   document.querySelectorAll('#mseg button').forEach((b)=>b.onclick=()=>{ S.mrange=b.dataset.m; render(); });
+  document.querySelectorAll('[data-lg]').forEach((b)=>b.onclick=()=>{ S.hidden=S.hidden||{}; S.hidden[b.dataset.lg]=!S.hidden[b.dataset.lg]; render(); });
   document.querySelectorAll('#cseg button').forEach((b)=>b.onclick=()=>{ S.ctype=b.dataset.c; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
   const tq=$('tQty'), ts=$('tSide'), tp=$('tPrev'), tc=$('tCopy');
   if (tc){ const s=stock(S.route.code); const upd=()=>{ const q=Math.max(1,Math.floor(+tq.value||1)); tp.textContent=`예상 금액 ${com(q*s.price)} (현재가 기준, 참고용)`; };
@@ -726,7 +756,7 @@ setInterval(()=>{
   else if (S.sim && Date.now() >= S.sim.nextUpdate){ recompute(); if(!(S.route.name==='admin' && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render(); else renderTape(); toast('새 시세가 반영되었습니다.'); }
   else if (S.sim && $('cd') && !S.sim.halted){ $('cd').textContent = fmtLeft(S.sim.nextUpdate-Date.now()); const f=$('slotfill'); if(f) f.style.width=((Date.now()-S.sim.slotStart)/(S.sim.nextUpdate-S.sim.slotStart)*100).toFixed(2)+'%'; }
 }, 1000);
-let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); if(S.route.name==='home'&&$('ixchart')){ const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); } if(S.route.name==='home'&&S.sim) drawMinis(); },150); });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); if(S.route.name==='home'&&$('multichart')) drawMulti(); },150); });
 init();
 </script>
 </body>
