@@ -109,6 +109,52 @@
       "type": "set_vol",
       "code": "IFD",
       "vol": 0.46
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "schedule",
+      "session": {
+        "open": "09:00",
+        "close": "22:00",
+        "everyMin": 15
+      },
+      "reason": "갱신 간격 10분 → 15분"
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "CCI",
+      "vol": 0.43
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "MUG",
+      "vol": 0.32
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "SAI",
+      "vol": 0.64
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "DER",
+      "vol": 0.53
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "RIM",
+      "vol": 0.39
+    },
+    {
+      "at": "2026-11-18 16:44:52",
+      "type": "set_vol",
+      "code": "IFD",
+      "vol": 0.56
     }
   ],
   "notices": []

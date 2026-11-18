@@ -18,9 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: 다음 10분 정각까지 대기
+      - name: 다음 15분 정각까지 대기
         if: ${{ inputs.wait }}
-        run: sleep $(( 600 - $(date +%s) % 600 + 15 ))
+        run: sleep $(( 900 - $(date +%s) % 900 + 15 ))
       - name: 시세 계산
         run: node scripts/build-data.js
         env:

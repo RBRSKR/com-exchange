@@ -752,7 +752,7 @@ async function init(){
 // clock + slot rollover (no writes: every viewer derives the same new prices locally)
 setInterval(()=>{
   $('kst').textContent = tKST(Date.now(),{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' KST';
-  if (window.COM_STATIC){ if (S.sim && Date.now() >= S.sim.nextUpdate && Date.now()-lastLoad > 60000) loadStatic(); if (S.sim && $('cd') && !S.sim.halted) $('cd').textContent = S.sim.nextUpdate>Date.now()?fmtLeft(S.sim.nextUpdate-Date.now()):'반영 중'; }
+  if (window.COM_STATIC){ if (S.sim && Date.now() >= S.sim.nextUpdate+20000 && Date.now()-lastLoad > 15000) loadStatic(); if (S.sim && $('cd') && !S.sim.halted) $('cd').textContent = S.sim.nextUpdate>Date.now()?fmtLeft(S.sim.nextUpdate-Date.now()):'반영 중'; }
   else if (S.sim && Date.now() >= S.sim.nextUpdate){ recompute(); if(!(S.route.name==='admin' && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render(); else renderTape(); toast('새 시세가 반영되었습니다.'); }
   else if (S.sim && $('cd') && !S.sim.halted){ $('cd').textContent = fmtLeft(S.sim.nextUpdate-Date.now()); const f=$('slotfill'); if(f) f.style.width=((Date.now()-S.sim.slotStart)/(S.sim.nextUpdate-S.sim.slotStart)*100).toFixed(2)+'%'; }
 }, 1000);
