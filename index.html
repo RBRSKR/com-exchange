@@ -139,6 +139,13 @@ textarea{resize:vertical;min-height:72px}
 .nw .kd{font:600 12px var(--mono)}
 .nw .hl{grid-column:1/-1;font-size:14px;line-height:1.5}
 .nw .fx{margin-left:auto;font:500 12px var(--mono)}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line)}
+.mini{padding:12px 12px 4px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);cursor:pointer;min-width:0}
+.mini:hover{background:var(--bg2)}
+.mini .mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:0 4px}
+.mini .mh .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:860px){.minis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.minis{grid-template-columns:1fr}}
 .hn{display:block;font-size:12px;color:var(--muted);white-space:normal;margin-top:2px;text-align:left}
 @media (max-width:860px){
   .grid2,.agrid{grid-template-columns:1fr}
@@ -284,12 +291,12 @@ function sparkSVG(s){
   const c = s.change>0?'var(--up)':s.change<0?'var(--down)':'var(--flat)';
   return `<svg class="spark" viewBox="0 0 96 28" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
 }
-function drawChart(s, boxId, dec){
-  boxId=boxId||'chart'; dec=dec||0; const nf=(n)=>dec?fmtD(n,dec):fmt(n);
+function drawChart(s, boxId, dec, opt){
+  boxId=boxId||'chart'; dec=dec||0; opt=opt||{}; const nf=(n)=>dec?fmtD(n,dec):fmt(n);
   const box = $(boxId); if (!box) return;
   if (boxId==='chart' && S.ctype==='candle' && S.range!=='1D') return drawCandles(s, box);
-  const W = box.clientWidth || 600, H = box.clientWidth < 520 ? 230 : 300, pl=8, pr=62, pt=16, pb=26;
-  const pts = seriesFor(s, S.range);
+  const W = box.clientWidth || 600, H = opt.h || (box.clientWidth < 520 ? 230 : 300), pl=8, pr=opt.pr||62, pt=opt.h?10:16, pb=26;
+  const pts = seriesFor(s, opt.range || S.range);
   const ps = pts.map((x)=>x.p); let mn=Math.min(...ps), mx=Math.max(...ps);
   const pad = Math.max(dec?0.01:1,(mx-mn)*0.12); mn=Math.max(0,mn-pad); mx=mx+pad;
   const t0=pts[0].t, t1=pts[pts.length-1].t, ts=Math.max(1,t1-t0);
@@ -321,6 +328,7 @@ function drawChart(s, boxId, dec){
   hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move); hit.addEventListener('pointerleave', leave);
 }
 
+function drawMinis(){ S.sim.stocks.forEach((s)=>{ if($('mc-'+s.code)) drawChart(s,'mc-'+s.code,0,{h:130,range:S.mrange||'1D',pr:46}); }); }
 function drawCandles(s, box){
   const W = box.clientWidth || 600, H = box.clientWidth < 520 ? 230 : 300, pl=8, pr=62, pt=16, pb=26;
   const from=rangeStart(S.range), days=new Map();
@@ -405,6 +413,10 @@ function viewHome(){
     <section class="card"><div class="card-h"><h2>시장 뉴스</h2><span class="sub">최근 ${Math.min(window.COM_STATIC?14:8,sim.news.length)}건</span></div><div class="news scroll" style="max-height:${window.COM_STATIC?820:480}px">${newsItems(sim.news,window.COM_STATIC?14:8,true)}</div></section>
     ${window.COM_STATIC?'':`<section class="card"><div class="card-h"><h2>디스코드 공지용 시세</h2><button class="btn sm" id="copyD">복사</button></div>
       <div class="card-b"><div class="sub">복사해서 디스코드 채널에 그대로 붙여넣습니다.</div><textarea class="copybox" readonly id="dtext">${esc(discordText())}</textarea></div></section>`}</div></div>`;
+  const mr = S.mrange||'1D';
+  h += `<section class="card" style="margin-top:24px"><div class="card-h"><h2>회사별 주가 그래프</h2><div class="seg" id="mseg">${['1D','1W','1M'].map((r)=>`<button data-m="${r}" class="${mr===r?'on':''}">${{'1D':'1일','1W':'1주','1M':'1개월'}[r]}</button>`).join('')}</div></div>
+    <div class="minis">${sim.stocks.map((s)=>{ const first=seriesFor(s,mr)[0].p, ch=s.price-first, cp=first?(s.price/first-1)*100:0;
+      return `<div class="mini" data-go="${s.code}"><div class="mh"><div style="min-width:0"><span class="tk" style="font-size:14px">${s.code}</span> <span class="nm">${esc(s.name)}</span></div><div style="text-align:right;white-space:nowrap"><span class="num">${fmt(s.price)}</span> <span class="num ${dir(ch)}" style="font-size:12px">${pct(cp)}</span></div></div><div class="chart" id="mc-${s.code}"></div></div>`; }).join('')}</div></section>`;
   h += `<div class="disclaim"><span>COM EXCHANGE는 시세 조회 전용 사이트입니다. COM 봇과 연동되어 있지 않으며, 잔액 조회·송금·자동 체결 기능이 없습니다. 매매와 입출금은 디스코드에서 사되가 직접 처리합니다.</span></div>`;
   return h;
 }
@@ -590,6 +602,7 @@ function render(){
   setStatus(); renderTape(); bind();
   if (r.name==='stock' && stock(r.code)) drawChart(stock(r.code));
   if (r.name==='home' && $('ixchart')) { const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); }
+  if (r.name==='home' && S.sim) drawMinis();
   if (keep) restoreInputs(keep);
 }
 const INPUTS=['wCode','wEff','wHead','aReason','pCode','pPrice','pReason','eCode','eName','eSector','eVol','eDesc','lCode','lName','lSector','lInit','lVol','lDesc','nTitle','nBody','nPin','tSide','tQty'];
@@ -602,6 +615,7 @@ function bind(){
   const cd=$('copyD'); if(cd) cd.onclick=()=>copyText(discordText());
   const setup=$('setup'); if(setup) setup.onclick=setupMarket;
   document.querySelectorAll('#rseg button').forEach((b)=>b.onclick=()=>{ S.range=b.dataset.r; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
+  document.querySelectorAll('#mseg button').forEach((b)=>b.onclick=()=>{ S.mrange=b.dataset.m; render(); });
   document.querySelectorAll('#cseg button').forEach((b)=>b.onclick=()=>{ S.ctype=b.dataset.c; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
   const tq=$('tQty'), ts=$('tSide'), tp=$('tPrev'), tc=$('tCopy');
   if (tc){ const s=stock(S.route.code); const upd=()=>{ const q=Math.max(1,Math.floor(+tq.value||1)); tp.textContent=`예상 금액 ${com(q*s.price)} (현재가 기준, 참고용)`; };
@@ -712,7 +726,7 @@ setInterval(()=>{
   else if (S.sim && Date.now() >= S.sim.nextUpdate){ recompute(); if(!(S.route.name==='admin' && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render(); else renderTape(); toast('새 시세가 반영되었습니다.'); }
   else if (S.sim && $('cd') && !S.sim.halted){ $('cd').textContent = fmtLeft(S.sim.nextUpdate-Date.now()); const f=$('slotfill'); if(f) f.style.width=((Date.now()-S.sim.slotStart)/(S.sim.nextUpdate-S.sim.slotStart)*100).toFixed(2)+'%'; }
 }, 1000);
-let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); if(S.route.name==='home'&&$('ixchart')){ const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); } },150); });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); if(S.route.name==='home'&&$('ixchart')){ const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); } if(S.route.name==='home'&&S.sim) drawMinis(); },150); });
 init();
 </script>
 </body>
