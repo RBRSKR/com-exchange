@@ -162,6 +162,52 @@
       "code": "RIM",
       "headline": "얼음 광산에서 이물질 없는 얼음 발견이되었습니다!",
       "effect": 10
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "schedule",
+      "session": {
+        "open": "09:00",
+        "close": "22:00",
+        "everyMin": 5
+      },
+      "reason": "갱신 간격 15분 → 5분"
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "CCI",
+      "vol": 0.25
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "MUG",
+      "vol": 0.18
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "SAI",
+      "vol": 0.37
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "DER",
+      "vol": 0.31
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "RIM",
+      "vol": 0.23
+    },
+    {
+      "at": "2026-11-18 17:53:20",
+      "type": "set_vol",
+      "code": "IFD",
+      "vol": 0.32
     }
   ],
   "notices": []

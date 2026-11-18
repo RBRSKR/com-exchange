@@ -226,3 +226,33 @@ test('갱신 간격을 중간에 바꿔도 지난 가격은 그대로, 이후는
   assert.deepEqual(after.schedule, ten);
   assert.equal(E.simulate(g, ev, change - 1).nextUpdate, START + 2 * DAY + (15 * 60 + 50) * MIN); // first 10-min slot after the change
 });
+
+test('체크포인트에서 이어 계산해도 처음부터 계산한 것과 완전히 같다', () => {
+  const g = G(); delete g.periodMin;
+  g.schedule = []; for (let m = 540; m <= 1320; m += 5) g.schedule.push(m);
+  g.newsPerStockDay = 0.6; g.dailyLimitPct = 30;
+  const at = (d, h, m) => START + d * DAY + (h * 60 + (m || 0)) * MIN;
+  const ev = [
+    { id: '1', at: at(1, 10, 3), type: 'news', payload: { code: 'NOVA', headline: '특보', effect: 9 } },
+    { id: '2', at: at(2, 0, 0), type: 'halt' },                       // exactly at a checkpoint time
+    { id: '3', at: at(2, 13, 7), type: 'resume' },
+    { id: '4', at: at(2, 15, 1), type: 'tick' },
+    { id: '5', at: at(3, 12, 0), type: 'list', payload: { code: 'LUNA', name: 'Luna', initial: 300, vol: 0.5, shares: 1000 } },
+    { id: '6', at: at(4, 9, 30), type: 'schedule', payload: { schedule: [540, 600, 660] } },
+  ];
+  const now = at(6, 17, 2);
+  const full = E.simulate(g, ev, now);
+  // chain checkpoints at every KST midnight
+  let st = null;
+  for (let d = 1; d <= 6; d++) st = E.simulate(g, ev, START + d * DAY, { from: st, snapshot: true }).state;
+  const res = E.simulate(g, ev, now, { from: st });
+  const strip = (r) => r.stocks.map((s) => ({ c: s.code, p: s.price, h: s.history, ref: s.ref, story: s.story }));
+  assert.deepEqual(strip(res), strip(full));
+  assert.deepEqual(res.news, full.news);
+  assert.equal(res.halted, full.halted); assert.equal(res.slot, full.slot);
+  assert.equal(res.slotStart, full.slotStart); assert.equal(res.nextUpdate, full.nextUpdate);
+  assert.deepEqual(res.schedule, full.schedule);
+  // checkpoint survives JSON (as stored in KV)
+  const res2 = E.simulate(g, ev, now, { from: JSON.parse(JSON.stringify(st)) });
+  assert.deepEqual(strip(res2), strip(full));
+});

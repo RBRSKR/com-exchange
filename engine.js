@@ -129,7 +129,7 @@
     if (!isStr(g.seed, 200) || !g.seed) errs.push('seed');
     if (!isNum(g.start)) errs.push('start');
     if (g.schedule !== undefined) {
-      if (!Array.isArray(g.schedule) || !g.schedule.length || g.schedule.length > 48 ||
+      if (!Array.isArray(g.schedule) || !g.schedule.length || g.schedule.length > 288 ||
           !g.schedule.every((m) => Number.isInteger(m) && m >= 0 && m < 1440) ||
           new Set(g.schedule).size !== g.schedule.length) errs.push('schedule');
     } else if (!isNum(g.periodMin) || g.periodMin < 1) errs.push('periodMin');
@@ -156,6 +156,9 @@
     const seed = genesis.seed;
     const keepHistory = opts.history !== false;
 
+    // resume from a saved checkpoint (state right after time F.t: all boundaries <= F.t and events < F.t applied)
+    const F = opts.from || null;
+    const t0 = F ? F.t : genesis.start, k0 = F ? F.k : 0, lastB0 = F ? F.lastB : genesis.start;
     const stocks = new Map();
     const order = [];
     function addStock(def, t) {
@@ -168,11 +171,12 @@
       };
       stocks.set(def.code, s); order.push(def.code);
     }
-    genesis.stocks.forEach((d) => addStock(d, genesis.start));
+    if (F) F.stocks.forEach((d) => { const s = JSON.parse(JSON.stringify(d)); stocks.set(s.code, s); order.push(s.code); });
+    else genesis.stocks.forEach((d) => addStock(d, genesis.start));
 
-    let halted = false;
+    let halted = F ? !!F.halted : false;
     const applied = [], skipped = [];
-    const manualSlots = new Set();
+    const manualSlots = new Set(F ? F.manualSlots : []);
     // update boundaries: fixed KST times of day (schedule) or every periodMin from start
     const bounds = [];
     let nextB = null;
@@ -186,11 +190,11 @@
       const until = now;
       if (genesis.schedule) {
         const allMins = [...new Set([...genesis.schedule, ...schedChanges.flatMap((c) => [...c.set])])].sort((a, b) => a - b);
-        for (let d = kstDay(genesis.start); ; d++) {
+        for (let d = kstDay(t0); ; d++) {
           const base = d * DAY - KST_OFFSET;
           for (const m of allMins) {
             const b = base + m * MIN;
-            if (b <= genesis.start) continue;
+            if (b <= t0) continue;
             if (!schedAt(b).set.has(m)) continue;
             if (b > until) { nextB = b; return; }
             bounds.push(b);
@@ -198,12 +202,12 @@
         }
       } else {
         const P = genesis.periodMin * MIN;
-        for (let k = 1; ; k++) { const b = genesis.start + k * P; if (b > until) { nextB = b; return; } bounds.push(b); }
+        for (let k = k0 + 1; ; k++) { const b = genesis.start + k * P; if (b > until) { nextB = b; return; } bounds.push(b); }
       }
     })();
-    const slotOf = (t) => { let lo = 0, hi = bounds.length; while (lo < hi) { const m = (lo + hi) >> 1; if (bounds[m] <= t) lo = m + 1; else hi = m; } return lo; };
+    const slotOf = (t) => { let lo = 0, hi = bounds.length; while (lo < hi) { const m = (lo + hi) >> 1; if (bounds[m] <= t) lo = m + 1; else hi = m; } return k0 + lo; };
 
-    const news = [];
+    const news = F ? F.news.slice() : [];
     // news frequency: optional target of news per stock per day, spread over however many updates a day has
     const perDayAt = (b) => genesis.schedule ? schedAt(b).len : Math.max(1, Math.round(1440 / genesis.periodMin));
     const pScaleAt = (b) => isNum(genesis.newsPerStockDay) && genesis.newsPerStockDay >= 0 ? Math.min(1, genesis.newsPerStockDay / ((NEWS_P.story + NEWS_P.single) * perDayAt(b))) : 1;
@@ -306,21 +310,28 @@
       }
     }
 
-    const evs = sortEvents((events || []).filter((e) => e && isNum(e.at) && typeof e.type === 'string' && e.at >= genesis.start));
+    const evs = sortEvents((events || []).filter((e) => e && isNum(e.at) && typeof e.type === 'string' && e.at >= t0));
     let ei = 0;
     const drain = (until) => { while (ei < evs.length && evs[ei].at < until) { const e = evs[ei++]; const why = applyEvent(e); (why ? skipped : applied).push(why ? { e, why } : e); } };
     bounds.forEach((B, i) => {
       drain(B); // events strictly before boundary
       if (!halted) order.forEach((c) => {
         const s = stocks.get(c); if (s.listedAt >= B) return;
-        const k = i + 1, item = rollNews(s, c, k, B);
+        const k = k0 + i + 1, item = rollNews(s, c, k, B);
         const rate = r4(randomRate(seed, c + ':' + k, s.vol) + (item ? item.eff : 0));
         move(s, rate, B, item ? 'news' : 'auto', item && item.headline);
         if (item) publish(s, B, item);
       });
     });
-    drain(now + 1); // events up to now; future ones wait
-    const lastSlot = bounds.length;
+    drain(opts.snapshot ? now : now + 1); // events up to now (a snapshot at T leaves events at exactly T to the resumed run)
+    const lastSlot = k0 + bounds.length;
+    const lastB = bounds.length ? bounds[bounds.length - 1] : lastB0;
+    const state = opts.snapshot ? {
+      t: now, k: lastSlot, lastB, halted, manualSlots: [...manualSlots], news: news.slice(),
+      stocks: order.map((c) => { const s = stocks.get(c); const o = {};
+        ['code', 'name', 'sector', 'description', 'initial', 'vol', 'shares', 'price', 'prev', 'ref', 'refDay', 'listedAt', 'updates', 'history', 'story', 'lastStory']
+          .forEach((k) => { if (s[k] !== undefined) o[k] = s[k]; }); return JSON.parse(JSON.stringify(o)); }),
+    } : undefined;
     // events exactly in the future are ignored until their time
 
     const today = kstDay(now);
@@ -333,8 +344,8 @@
     return {
       stocks: list, halted, applied, skipped, news: news.reverse(),
       schedule: genesis.schedule ? [...schedAt(now + 1).set].sort((a, b) => a - b) : null,
-      slot: lastSlot, slotStart: lastSlot ? bounds[lastSlot - 1] : genesis.start,
-      nextUpdate: nextB, periodMs: nextB - (lastSlot ? bounds[lastSlot - 1] : genesis.start), dailyLimitPct: L,
+      slot: lastSlot, slotStart: lastB,
+      nextUpdate: nextB, periodMs: nextB - lastB, dailyLimitPct: L, state,
     };
   }
 
