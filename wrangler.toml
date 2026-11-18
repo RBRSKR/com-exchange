@@ -1,0 +1,10 @@
+name = "com-exchange"
+main = "worker/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+CONFIG_URL = "https://raw.githubusercontent.com/RBRSKR/com-exchange/main/market.json"
+SITE_URL = "https://rbrskr.github.io/com-exchange/"
+
+# MARKET_SEED는 Cloudflare 대시보드 → Worker → Settings → Variables and Secrets 에 "Secret"으로 넣는다 (여기 적지 말 것)
