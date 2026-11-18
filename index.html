@@ -196,6 +196,7 @@ const schedLabel = () => { if(!S.genesis) return ''; const sc=S.genesis.schedule
 const kstMin = (ms) => Math.floor(((ms + 9*36e5) % 864e5) / 6e4);
 function session(){ // real-market style status
   if (!S.sim) return null; if (S.sim.halted) return { k:'halt', label:'시장 중지' };
+  if (S.genesis && S.genesis.start > Date.now()) return { k:'pre', label: tKST(S.genesis.start,{hour:'2-digit',minute:'2-digit',hour12:false})+' 개장 예정' };
   const sc=S.genesis&&S.genesis.schedule; if(!sc||sc.length<4) return { k:'open', label:'운영 중' };
   const m=sc.slice().sort((a,b)=>a-b), n=kstMin(Date.now());
   if (n < m[0]) return { k:'pre', label:'장 시작 전 · '+hhmm(m[0])+' 개장' };
@@ -385,7 +386,7 @@ function viewHome(){
   const ix = computeIndex();
   if (ix) h += `<section class="card" style="margin-top:24px"><div class="card-h"><div><div class="sub">COM 종합지수 · 시가총액 가중 · 개장일 1,000 기준</div>
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:4px"><span class="num" style="font-size:28px;font-weight:500">${fmtD(ix.price,2)}</span><span class="num ${dir(ix.change)}" style="font-weight:600">${arrow(ix.change)} ${fmtD(Math.abs(ix.change),2)} (${pct(ix.changePct)})</span></div></div>
-      <div style="text-align:right"><div class="sub">시장 시가총액</div><div class="num" style="font-size:16px">${fmtCap(ix.totalCap)} COM</div></div></div>
+</div>
     <div style="padding:4px 4px 0"><div class="chart" id="ixchart"></div></div></section>`;
   h += `<div class="strip">
     <div><span class="k">마지막 갱신</span><span class="v num">${esc(tKST(sim.slotStart,{hour:'2-digit',minute:'2-digit',hour12:false}))}</span></div>
@@ -686,7 +687,7 @@ async function loadStatic(){
 }
 async function init(){
   S.route=parseRoute(); render();
-  if (window.COM_STATIC){ loadStatic(); setInterval(loadStatic, 5*60000); return; }
+  if (window.COM_STATIC){ loadStatic(); setInterval(loadStatic, 60000); return; }
   const stallT = setTimeout(()=>{ if(S.genesis===undefined){ S.stale=true; render(); } }, 10000);
   let db=null, user=null;
   try { [db,user] = await Promise.all([window.claude?claude.use('db'):null, window.claude?claude.use('user'):null]); } catch(e){}
