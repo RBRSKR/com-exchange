@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>COM EXCHANGE 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#0b0c0e;--bg2:#111317;--line:#23262c;--line2:#33373f;--muted:#8d8a83;--dim:#5f5d58;--text:#ece9e2;--up:#ff5a5f;--down:#4d8eff;--accent:#f0b23e;--ok:#5ccf8f;--mono:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 'IBM Plex Sans KR',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1100px;margin:0 auto;padding:0 24px 48px}
+.bar{border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;gap:16px;height:56px;padding-bottom:0}
+.logo{font-weight:600;font-size:16px;letter-spacing:.02em}.logo b{color:var(--accent);font-family:var(--mono)}
+.spacer{flex:1}
+h1{font-size:28px;margin:32px 0 4px;font-weight:600;letter-spacing:-.02em}
+h2{font-size:14px;margin:0;font-weight:600}
+.sub{color:var(--muted);font-size:12px}
+.card{border:1px solid var(--line);background:var(--bg)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.card-b{padding:16px;display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;align-items:start}
+.btn{background:transparent;border:1px solid var(--line2);border-radius:2px;padding:8px 12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#17120a;font-weight:600}
+.btn.danger{color:var(--up);border-color:#5a2a2d}
+.btn.sm{padding:4px 8px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);flex:1;min-width:110px}
+input,select,textarea{background:var(--bg2);border:1px solid var(--line2);border-radius:2px;padding:8px 12px;font-size:14px;min-width:0;color:var(--text)}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--accent);border-color:var(--accent)}
+textarea{resize:vertical;min-height:64px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--dim);font-weight:500;text-align:left;padding:8px 16px;border-bottom:1px solid var(--line)}
+td{padding:8px 16px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+tr:last-child td{border-bottom:0}
+.r{text-align:right}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.acc{color:var(--accent)}
+.scroll{max-height:360px;overflow:auto}
+.state{display:flex;gap:24px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:24px}
+.state>div{padding:12px 0}.state .k{display:block;font-size:12px;color:var(--muted)}.state .v{font-size:20px}
+.banner{margin-top:16px;border-left:2px solid var(--accent);background:var(--bg2);padding:8px 16px;font-size:13px}
+.banner.err{border-left-color:var(--up)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 16px;font-weight:500;z-index:50;display:none;max-width:90vw}
+.modal{position:fixed;inset:0;background:rgba(5,5,6,.78);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal .box{background:var(--bg);border:1px solid var(--line2);border-top:2px solid var(--accent);max-width:440px;width:100%;padding:24px}
+.modal h3{margin:0 0 8px;font-size:16px}.modal p{color:var(--muted);margin:0 0 24px;white-space:pre-line}
+ol{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:13px}ol li{margin-bottom:4px}
+code{font-family:var(--mono);font-size:12px;background:var(--bg2);padding:1px 4px}
+@media (max-width:820px){.grid{grid-template-columns:1fr}.wrap{padding:0 16px 48px}th,td{padding-left:12px;padding-right:12px}}
+</style>
+</head>
+<body>
+<div class="bar"><div class="wrap"><span class="logo"><b>COM</b> EXCHANGE 관리</span><div class="spacer"></div><a href="./" class="sub">사이트 보기</a></div></div>
+<main class="wrap" id="app"></main>
+<div class="toast" id="toast" role="status"></div>
+<div class="modal" id="modal"><div class="box"><h3 id="mT"></h3><p id="mB"></p><div class="row" style="justify-content:flex-end"><button class="btn" id="mNo">취소</button><button class="btn pri" id="mOk">확인</button></div></div></div>
+<script>
+'use strict';
+// ---- where the repo is: rbrskr.github.io/com-exchange → RBRSKR/com-exchange ----
+const OWNER = /\.github\.io$/.test(location.hostname) ? location.hostname.split('.')[0] : 'RBRSKR';
+const REPO = (/\.github\.io$/.test(location.hostname) && location.pathname.split('/')[1]) || 'com-exchange';
+const API = 'https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/market.json';
+const TKEY = 'com-admin-token';
+const A = { token: null, cfg: null, sha: null, data: null, busy: false, err: null, waitFrom: 0, loading: false };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n) => Math.round(n).toLocaleString('ko-KR');
+const tKST = (ms) => new Date(ms).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+function nowKST() { const d = new Date(Date.now() + 9 * 36e5), p = (x) => String(x).padStart(2, '0');
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds()); }
+function parseKST(v) { if (typeof v === 'number') return v; const s = String(v).trim().replace(' ', 'T'); return Date.parse(s + (/T\d{1,2}:\d{2}:\d{2}$/.test(s) ? '' : ':00') + '+09:00'); }
+let tt; function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(tt); tt = setTimeout(() => t.style.display = 'none', 3200); }
+function ask(title, body, ok) { return new Promise((res) => { $('mT').textContent = title; $('mB').textContent = body; $('mOk').textContent = ok || '확인'; $('modal').style.display = 'flex';
+  const done = (v) => { $('modal').style.display = 'none'; res(v); }; $('mOk').onclick = () => done(true); $('mNo').onclick = () => done(false); }); }
+
+// UTF-8 safe base64
+const b64dec = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
+const b64enc = (s) => { const bytes = new TextEncoder().encode(s); let bin = ''; bytes.forEach((x) => bin += String.fromCharCode(x)); return btoa(bin); };
+
+async function gh(method, body) {
+  const r = await fetch(API + (method === 'GET' ? '?ref=main&t=' + Date.now() : ''), { method, cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + A.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j.message || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return r.json();
+}
+async function loadCfg() { const j = await gh('GET'); A.sha = j.sha; A.cfg = JSON.parse(b64dec(j.content)); }
+async function loadData() { try { const r = await fetch('data.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) A.data = await r.json(); } catch (e) {} }
+async function refresh() {
+  A.loading = true; render();
+  try { await Promise.all([loadCfg(), loadData()]); A.err = null; }
+  catch (e) { A.err = e.status === 401 ? '토큰이 맞지 않거나 만료됐습니다. 새 토큰을 넣어 주세요.' : e.status === 404 ? '저장소나 market.json을 찾을 수 없습니다. 토큰에 com-exchange 저장소 권한이 있는지 확인하세요.' : '불러오지 못했습니다: ' + e.message; }
+  A.loading = false; render();
+}
+
+// append one change to market.json and commit it (re-reads first so two quick edits never clobber each other)
+async function commit(label, mutate, clear) {
+  if (A.busy) return; A.busy = true; render();
+  try {
+    await loadCfg();
+    const cfg = JSON.parse(JSON.stringify(A.cfg));
+    const err = mutate(cfg); if (err) { toast(err); return; }
+    const text = JSON.stringify(cfg, null, 2) + '\n';
+    await gh('PUT', { message: '관리: ' + label, content: b64enc(text), sha: A.sha, branch: 'main' });
+    A.waitFrom = Date.now(); toast(label + ' 완료! 사이트 반영까지 1~2분 걸려요.');
+    (clear || []).forEach((id) => { const el = $(id); if (el) el.value = ''; });
+    await loadCfg();
+  } catch (e) {
+    toast(e.status === 409 || e.status === 422 ? '다른 곳에서 동시에 수정됐어요. 다시 시도해 주세요.' : e.status === 401 || e.status === 403 ? '권한이 없습니다. 토큰 권한(Contents 쓰기)을 확인하세요.' : '저장 실패: ' + e.message);
+  } finally { A.busy = false; render(); }
+}
+const ev = (type, extra) => (cfg) => { (cfg.events = cfg.events || []).push(Object.assign({ at: nowKST(), type }, extra)); };
+
+// ---------- views ----------
+function viewToken() {
+  return `<h1>관리자 로그인</h1><div class="sub">GitHub 토큰으로 market.json을 직접 고칩니다. 토큰은 이 브라우저에만 저장되고 GitHub 말고는 어디에도 보내지 않습니다.</div>
+  <div class="grid"><section class="card"><div class="card-h"><h2>토큰 넣기</h2></div><div class="card-b">
+    <label class="field">GitHub 토큰<input id="tok" type="password" autocomplete="off" placeholder="github_pat_..."></label>
+    <div><button class="btn pri" id="tokSave">로그인</button></div>
+    <div class="sub">공용 컴퓨터에서는 쓰지 마세요. 다 쓰면 '로그아웃'을 누르면 지워집니다.</div></div></section>
+  <section class="card"><div class="card-h"><h2>토큰 만드는 법 (처음 한 번)</h2></div><div class="card-b" style="gap:4px">
+    <ol><li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub 토큰 만들기 페이지</a> 열기</li>
+    <li>Token name: <code>com-admin</code>, Expiration: 90 days</li>
+    <li>Repository access: <b>Only select repositories</b> → <code>${esc(REPO)}</code></li>
+    <li>Permissions → Repository permissions → <b>Contents: Read and write</b></li>
+    <li>Generate token → 나온 토큰을 복사해서 왼쪽에 붙여넣기</li></ol></div></section></div>`;
+}
+function stockOpts() { return (A.cfg.stocks || []).concat((A.cfg.events || []).filter((e) => e.type === 'list').map((e) => ({ code: e.code, name: e.name })))
+  .map((s) => `<option value="${esc(s.code)}">${esc(s.code)} · ${esc(s.name)}</option>`).join(''); }
+function curStocks() { return (A.data && A.data.sim && A.data.sim.stocks) || []; }
+function isHalted() { let h = false; (A.cfg.events || []).forEach((e) => { if (parseKST(e.at) <= Date.now()) { if (e.type === 'halt') h = true; if (e.type === 'resume') h = false; } }); return h; }
+const LABEL = { halt: '시장 중지', resume: '시장 재개', news: '뉴스', set_price: '가격 변경', set_vol: '변동폭', list: '신규 상장', update_info: '정보 수정' };
+function evText(e) { switch (e.type) { case 'news': return `${e.code} ${e.effect > 0 ? '+' : ''}${e.effect}% · ${e.headline}`; case 'set_price': return `${e.code} → ${fmt(e.price)} COM`; case 'set_vol': return `${e.code} ±${e.vol}%`;
+  case 'list': return `${e.code} ${e.name} · ${fmt(e.initial)} COM`; case 'update_info': return e.code; default: return ''; } }
+function viewMain() {
+  const cfg = A.cfg, halted = isHalted(), st = curStocks(), d = A.data;
+  const pending = A.waitFrom && (!d || d.generatedAt < A.waitFrom);
+  const evs = (cfg.events || []).map((e, i) => Object.assign({ i }, e)).reverse().slice(0, 40);
+  return `<h1>관리</h1><div class="sub">모든 변경은 market.json에 지금 시각으로 기록되고, 1~2분 뒤 사이트에 반영됩니다. 과거 가격은 바뀌지 않습니다.</div>
+  ${pending ? '<div class="banner">방금 바꾼 내용을 사이트에 반영하는 중이에요… (1~2분)</div>' : ''}
+  <div class="state"><div><span class="k">시장</span><span class="v ${halted ? 'up' : 'ok'}">${halted ? '중지됨' : '운영 중'}</span></div>
+    ${st.map((s) => `<div><span class="k">${esc(s.code)}</span><span class="v num">${fmt(s.price)}</span></div>`).join('')}
+    <div><span class="k">사이트 데이터</span><span class="v num" style="font-size:14px">${d ? esc(tKST(d.generatedAt)) : '-'}</span></div></div>
+  <div class="grid">
+    <section class="card"><div class="card-h"><h2>시장 운영</h2></div><div class="card-b">
+      <div class="sub">중지하면 가격과 뉴스가 멈추고, 재개하면 다음 갱신 시각부터 다시 움직입니다.</div>
+      <label class="field">사유 (기록용)<input id="aReason" maxlength="200"></label>
+      <div class="row">${halted ? '<button class="btn pri" data-a="resume">시장 재개</button>' : '<button class="btn danger" data-a="halt">시장 중지</button>'}</div></div></section>
+    <section class="card"><div class="card-h"><h2>뉴스 발행 (특보)</h2></div><div class="card-b">
+      <div class="sub">발행하는 즉시 뉴스가 뜨고 효과만큼 가격이 움직입니다 (하루 ±${esc(cfg.dailyLimitPct)}% 제한 안에서).</div>
+      <div class="row"><label class="field">종목<select id="wCode">${stockOpts()}</select></label><label class="field" style="max-width:120px">효과 (%)<input id="wEff" type="number" min="-20" max="20" step="0.5" placeholder="10, -8"></label></div>
+      <label class="field">뉴스 제목<input id="wHead" maxlength="100" placeholder="예: 이프스 다이나믹스, 휴머노이드 판매 개시!"></label>
+      <div><button class="btn pri" data-a="news" ${halted ? 'disabled' : ''}>뉴스 발행</button></div></div></section>
+    <section class="card"><div class="card-h"><h2>가격 직접 변경</h2></div><div class="card-b">
+      <div class="sub">일일 제한을 받지 않고, 그날 기준가가 새 가격으로 바뀝니다. 사유는 필수예요.</div>
+      <div class="row"><label class="field">종목<select id="pCode">${stockOpts()}</select></label><label class="field">새 가격 (COM)<input id="pPrice" type="number" min="1" step="1"></label></div>
+      <label class="field">사유<input id="pReason" maxlength="200"></label><div><button class="btn pri" data-a="set_price">가격 변경</button></div></div></section>
+    <section class="card"><div class="card-h"><h2>변동폭 변경</h2></div><div class="card-b">
+      <div class="sub">30분 갱신 1번마다 움직일 수 있는 최대 폭(%)입니다. 0.3~1.5 정도가 실제 주식 같아요.</div>
+      <div class="row"><label class="field">종목<select id="vCode">${stockOpts()}</select></label><label class="field">변동폭 ±%<input id="vVol" type="number" min="0" max="20" step="0.05"></label></div>
+      <div><button class="btn" data-a="set_vol">변동폭 저장</button></div></div></section>
+    <section class="card"><div class="card-h"><h2>신규 상장</h2></div><div class="card-b">
+      <div class="row"><label class="field" style="max-width:110px">코드<input id="lCode" maxlength="6" placeholder="ABC" style="text-transform:uppercase"></label><label class="field">기업명<input id="lName" maxlength="60"></label></div>
+      <div class="row"><label class="field">섹터<input id="lSector" maxlength="30"></label><label class="field">상장가<input id="lInit" type="number" min="1" step="1"></label><label class="field">변동폭 ±%<input id="lVol" type="number" min="0" max="20" step="0.05" value="0.7"></label><label class="field">발행 주식 수<input id="lShares" type="number" min="1" step="1" value="10000"></label></div>
+      <label class="field">기업 설명<textarea id="lDesc" maxlength="1000"></textarea></label>
+      <div><button class="btn pri" data-a="list">상장</button></div><div class="sub">상장은 되돌릴 수 없어요. 실제 기업이 아닌 가상 회사만 등록하세요.</div></div></section>
+    <section class="card"><div class="card-h"><h2>공지</h2></div><div class="card-b">
+      <label class="field">제목<input id="nTitle" maxlength="80"></label><label class="field">내용<textarea id="nBody" maxlength="1000"></textarea></label>
+      <div class="row" style="justify-content:space-between;align-items:center"><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="nPin"> 상단 고정</label><button class="btn pri" data-a="notice">공지 등록</button></div>
+      ${(cfg.notices || []).map((n, i) => `<div class="row" style="justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:8px"><div>${n.pinned ? '<span class="acc num">고정</span> ' : ''}${esc(n.title)}</div><div class="row"><button class="btn sm" data-pin="${i}">${n.pinned ? '고정 해제' : '고정'}</button><button class="btn sm danger" data-del="${i}">삭제</button></div></div>`).join('')}</div></section>
+  </div>
+  <section class="card" style="margin-top:24px"><div class="card-h"><h2>관리 기록</h2><span class="sub">${(cfg.events || []).length}건</span></div>
+    <div class="scroll"><table><thead><tr><th>시각</th><th>작업</th><th>내용</th></tr></thead><tbody>
+    ${evs.length ? evs.map((e) => `<tr><td class="num" style="white-space:nowrap">${esc(e.at)}</td><td>${esc(LABEL[e.type] || e.type)}</td><td>${esc(evText(e))}${e.reason ? '<div class="sub">' + esc(e.reason) + '</div>' : ''}</td></tr>`).join('') : '<tr><td colspan="3" class="sub">기록 없음</td></tr>'}
+    </tbody></table></div></section>
+  <div class="row" style="margin-top:24px;justify-content:space-between"><span class="sub">저장소: ${esc(OWNER)}/${esc(REPO)}</span><div class="row"><button class="btn sm" id="reload">새로고침</button><button class="btn sm danger" id="logout">로그아웃</button></div></div>`;
+}
+const KEEP = ['aReason', 'wCode', 'wEff', 'wHead', 'pCode', 'pPrice', 'pReason', 'vCode', 'vVol', 'lCode', 'lName', 'lSector', 'lInit', 'lVol', 'lShares', 'lDesc', 'nTitle', 'nBody', 'nPin'];
+function render() {
+  const focus = document.activeElement && document.activeElement.id;
+  const keep = {}; KEEP.forEach((id) => { const el = $(id); if (el) keep[id] = el.type === 'checkbox' ? el.checked : el.value; });
+  const app = $('app');
+  if (!A.token) { app.innerHTML = viewToken(); bindToken(); return; }
+  if (!A.cfg) { app.innerHTML = `<h1>관리</h1>${A.err ? `<div class="banner err">${esc(A.err)}</div><div style="margin-top:16px" class="row"><button class="btn" id="reload">다시 시도</button><button class="btn danger" id="logout">토큰 지우기</button></div>` : '<div class="sub">불러오는 중…</div>'}`; bindCommon(); return; }
+  app.innerHTML = viewMain() + (A.err ? `<div class="banner err">${esc(A.err)}</div>` : '');
+  Object.keys(keep).forEach((id) => { const el = $(id); if (el) { if (el.type === 'checkbox') el.checked = keep[id]; else el.value = keep[id]; } });
+  if (focus && $(focus)) $(focus).focus();
+  document.querySelectorAll('[data-a]').forEach((b) => { b.disabled = b.disabled || A.busy; b.onclick = () => act(b.dataset.a); });
+  document.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => { const i = +b.dataset.del, n = A.cfg.notices[i]; if (!await ask('공지 삭제', n.title + '\n\n삭제할까요?', '삭제')) return;
+    commit('공지 삭제', (c) => { if (!c.notices || !c.notices[i] || c.notices[i].title !== n.title) return '공지 목록이 바뀌었어요. 새로고침 후 다시 해 주세요.'; c.notices.splice(i, 1); }); });
+  document.querySelectorAll('[data-pin]').forEach((b) => b.onclick = () => { const i = +b.dataset.pin, n = A.cfg.notices[i];
+    commit(n.pinned ? '공지 고정 해제' : '공지 고정', (c) => { if (!c.notices || !c.notices[i] || c.notices[i].title !== n.title) return '공지 목록이 바뀌었어요. 새로고침 후 다시 해 주세요.'; c.notices[i].pinned = !c.notices[i].pinned; }); });
+  const vc = $('vCode'); if (vc) { const fill = () => { const s = curStocks().find((x) => x.code === vc.value); if (s && !keep.vVol) $('vVol').value = s.vol; }; vc.onchange = () => { keep.vVol = ''; fill(); }; fill(); }
+  bindCommon();
+}
+function bindToken() { $('tokSave').onclick = () => { const t = $('tok').value.trim(); if (!t) return toast('토큰을 붙여넣으세요.'); A.token = t; try { localStorage.setItem(TKEY, t); } catch (e) {} refresh(); }; }
+function bindCommon() { const r = $('reload'); if (r) r.onclick = refresh; const l = $('logout'); if (l) l.onclick = () => { try { localStorage.removeItem(TKEY); } catch (e) {} A.token = null; A.cfg = null; A.err = null; render(); }; }
+
+async function act(a) {
+  const v = (id) => ($(id).value || '').trim(), codes = curStocks().map((s) => s.code);
+  if (a === 'halt' || a === 'resume') { if (!await ask(LABEL[a], a === 'halt' ? '가격과 뉴스를 멈춥니다.' : '다음 갱신 시각부터 다시 움직입니다.', LABEL[a])) return;
+    return commit(LABEL[a], ev(a, v('aReason') ? { reason: v('aReason') } : {}), ['aReason']); }
+  if (a === 'news') { const code = v('wCode'), headline = v('wHead'), effect = Number(v('wEff'));
+    if (!headline) return toast('뉴스 제목을 입력하세요.'); if (v('wEff') === '' || !(effect >= -20 && effect <= 20)) return toast('효과는 -20 ~ +20 사이로 입력하세요.');
+    if (!await ask('뉴스 발행', `${code} · ${headline}\n효과 ${effect > 0 ? '+' : ''}${effect}% (즉시 반영)`, '발행')) return;
+    return commit('뉴스 발행', ev('news', { code, headline, effect }), ['wHead', 'wEff']); }
+  if (a === 'set_price') { const code = v('pCode'), price = Number(v('pPrice')), reason = v('pReason');
+    if (!Number.isInteger(price) || price < 1) return toast('가격은 1 이상 정수예요.'); if (!reason) return toast('사유를 입력하세요.');
+    if (!await ask('가격 직접 변경', `${code} → ${fmt(price)} COM\n사유: ${reason}`, '변경')) return;
+    return commit('가격 변경', ev('set_price', { code, price, reason }), ['pPrice', 'pReason']); }
+  if (a === 'set_vol') { const code = v('vCode'), vol = Number(v('vVol')); if (!(vol >= 0 && vol <= 20)) return toast('변동폭은 0~20 사이예요.');
+    return commit('변동폭 변경', ev('set_vol', { code, vol })); }
+  if (a === 'list') { const code = v('lCode').toUpperCase(), name = v('lName'), initial = Number(v('lInit')), vol = Number(v('lVol')), shares = Number(v('lShares'));
+    if (!/^[A-Z0-9]{2,6}$/.test(code)) return toast('코드는 영문 대문자·숫자 2~6자예요.'); if (codes.includes(code)) return toast('이미 있는 코드예요.');
+    if (!name) return toast('기업명을 입력하세요.'); if (!Number.isInteger(initial) || initial < 1) return toast('상장가를 확인하세요.'); if (!(vol >= 0 && vol <= 20)) return toast('변동폭을 확인하세요.'); if (!Number.isInteger(shares) || shares < 1) return toast('발행 주식 수를 확인하세요.');
+    if (!await ask('신규 상장', `${code} ${name}\n상장가 ${fmt(initial)} COM · ±${vol}% · ${fmt(shares)}주\n\n되돌릴 수 없어요.`, '상장')) return;
+    return commit(code + ' 상장', ev('list', { code, name, sector: v('lSector'), description: $('lDesc').value.slice(0, 1000), initial, vol, shares }), ['lCode', 'lName', 'lSector', 'lInit', 'lDesc']); }
+  if (a === 'notice') { const title = v('nTitle'); if (!title) return toast('제목을 입력하세요.');
+    return commit('공지 등록', (c) => { (c.notices = c.notices || []).push({ title, body: $('nBody').value.slice(0, 1000), pinned: $('nPin').checked, at: nowKST() }); }, ['nTitle', 'nBody']); }
+}
+try { A.token = localStorage.getItem(TKEY); } catch (e) {}
+render(); if (A.token) refresh();
+setInterval(() => { if (A.token && A.cfg && A.waitFrom && !A.busy) loadData().then(() => { if (A.data && A.data.generatedAt >= A.waitFrom) { A.waitFrom = 0; render(); toast('사이트에 반영됐어요.'); } }); }, 20000);
+</script>
+</body>
+</html>

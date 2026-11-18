@@ -53,6 +53,15 @@
       up: ['폭염 예보… 얼음 수요 급증에 {n} 웃는다', '{n}, 빙수 프랜차이즈와 공급 계약'],
       down: ['이상 기온으로 {n} 광산 일부 녹아내려', '{n} 채굴 장비 고장으로 작업 중단'],
     },
+    IFD: {
+      stories: [
+        { go: '{n}, 사람처럼 걷는 휴머노이드 로봇 공개 예고', ok: '{n} 휴머노이드 공개 대성공! 예약 주문 폭주', ng: '{n} 휴머노이드, 무대에서 넘어져… 시연 망신' },
+        { go: '{n}, 로봇 배달 서비스 시범 운영 시작', ok: '{n} 로봇 배달, 전국 확대 확정', ng: '{n} 배달 로봇 길 잃고 강에 빠져… 서비스 중단' },
+        { go: '{n}, 공장용 로봇 팔 대량 수주 협상 중', ok: '{n}, 자동차 회사와 로봇 팔 1만 대 계약', ng: '{n} 로봇 팔 수주 협상 결렬' },
+      ],
+      up: ['{n} 청소 로봇, 올해의 발명품 선정', '{n}, 해외 공장 증설 발표'],
+      down: ['{n} 로봇 오작동 영상 퍼져 논란', '{n} 핵심 부품 공급 차질'],
+    },
     _: {
       stories: [
         { go: '{n}, 대형 신사업 발표 예정', ok: '{n} 신사업 대성공! 매출 급증', ng: '{n} 신사업 실패… 손실 발생' },
@@ -110,7 +119,8 @@
   function validStock(s) {
     return s && CODE_RE.test(s.code) && isStr(s.name, 60) && s.name.trim() &&
       isNum(s.initial) && s.initial >= 1 && s.initial <= MAX_PRICE && Math.round(s.initial) === s.initial &&
-      isNum(s.vol) && s.vol >= 0 && s.vol <= MAX_VOL;
+      isNum(s.vol) && s.vol >= 0 && s.vol <= MAX_VOL &&
+      (s.shares === undefined || (Number.isInteger(s.shares) && s.shares > 0 && s.shares <= 1e12));
   }
 
   function validateGenesis(g) {
@@ -124,6 +134,7 @@
           new Set(g.schedule).size !== g.schedule.length) errs.push('schedule');
     } else if (!isNum(g.periodMin) || g.periodMin < 1) errs.push('periodMin');
     if (!isNum(g.dailyLimitPct) || g.dailyLimitPct <= 0 || g.dailyLimitPct > 100) errs.push('dailyLimitPct');
+    if (g.newsPerStockDay !== undefined && (!isNum(g.newsPerStockDay) || g.newsPerStockDay < 0 || g.newsPerStockDay > 10)) errs.push('newsPerStockDay');
     if (!Array.isArray(g.stocks) || !g.stocks.length) errs.push('stocks');
     else g.stocks.forEach((s, i) => { if (!validStock(s)) errs.push('stocks[' + i + ']'); });
     return errs;
@@ -151,7 +162,7 @@
       const s = {
         code: def.code, name: def.name.trim(), sector: isStr(def.sector, 30) ? def.sector : '',
         description: isStr(def.description, 1000) ? def.description : '',
-        initial: def.initial, vol: def.vol, price: def.initial, prev: def.initial,
+        initial: def.initial, vol: def.vol, price: def.initial, prev: def.initial, shares: Number.isInteger(def.shares) && def.shares > 0 ? def.shares : 0,
         ref: def.initial, refDay: kstDay(t), listedAt: t, updates: 0,
         history: keepHistory ? [{ t, p: def.initial, k: 'list' }] : null,
       };
@@ -186,6 +197,10 @@
     const slotOf = (t) => { let lo = 0, hi = bounds.length; while (lo < hi) { const m = (lo + hi) >> 1; if (bounds[m] <= t) lo = m + 1; else hi = m; } return lo; };
 
     const news = [];
+    // news frequency: optional target of news per stock per day, spread over however many updates a day has
+    const perDay = genesis.schedule ? genesis.schedule.length : Math.max(1, Math.round(1440 / genesis.periodMin));
+    const pScale = isNum(genesis.newsPerStockDay) && genesis.newsPerStockDay >= 0 ? Math.min(1, genesis.newsPerStockDay / ((NEWS_P.story + NEWS_P.single) * perDay)) : 1;
+    const storyGap = isNum(genesis.newsPerStockDay) ? Math.max(1, Math.ceil(perDay / 3)) : 1; // updates between 예고 and 결과
     const r4 = (x) => Math.round(x * 10000) / 10000;
     const fill = (tpl, s) => tpl.split('{n}').join(s.name);
     const span = (key, [a, b]) => a + unitRand(seed, key) * (b - a);
@@ -209,14 +224,14 @@
         return { kind: ok ? 'success' : 'fail', eff, headline: fill(ok ? st.t.ok : st.t.ng, s) };
       }
       const r = unitRand(seed, c + ':nw:' + k);
-      if (r < NEWS_P.story) {
+      if (r < NEWS_P.story * pScale) {
         let ti = Math.floor(unitRand(seed, c + ':st:' + k) * T.stories.length);
         if (T.stories.length > 1 && ti === s.lastStory) ti = (ti + 1) % T.stories.length; // no back-to-back repeat
         const t = T.stories[ti]; s.lastStory = ti;
-        s.story = { t, resolveK: k + 1 + Math.floor(unitRand(seed, c + ':rk:' + k) * 2) };
+        s.story = { t, resolveK: k + storyGap * (1 + Math.floor(unitRand(seed, c + ':rk:' + k) * 2)) };
         return { kind: 'setup', eff: r4(span(c + ':ge:' + k, EFF.go)), headline: fill(t.go, s) };
       }
-      if (r < NEWS_P.story + NEWS_P.single) {
+      if (r < (NEWS_P.story + NEWS_P.single) * pScale) {
         const up = unitRand(seed, c + ':sd:' + k) < 0.5, list = up ? T.up : T.down;
         const h = list[Math.floor(unitRand(seed, c + ':sp:' + k) * list.length)];
         return { kind: 'single', eff: r4((up ? 1 : -1) * span(c + ':se:' + k, EFF.single)), headline: fill(h, s) };

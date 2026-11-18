@@ -190,3 +190,17 @@ test('관리자 뉴스는 즉시 반영되고 기록된다', () => {
   assert.equal(s.history.at(-1).k, 'news'); assert.ok(s.price > s.history.at(-2).p);
   assert.equal(E.simulate(G(), [{ id: 'x', at: t, type: 'news', payload: { code: 'ASTR', headline: 'x', effect: 99 } }], t + 1).skipped.length, 1);
 });
+
+test('장중 30분 갱신 + 뉴스 빈도 조절: 하루 뉴스 수가 목표 근처, 예고 결과는 몇 시간 뒤', () => {
+  const g = G(); delete g.periodMin;
+  g.schedule = []; for (let m = 540; m <= 1320; m += 30) g.schedule.push(m); // 09:00~22:00
+  g.newsPerStockDay = 0.6; g.stocks.forEach((s) => { s.vol = 0.8; s.shares = 10000; });
+  const days = 200, r = E.simulate(g, [], START + days * DAY);
+  const perStockDay = r.news.length / (days * g.stocks.length);
+  assert.ok(perStockDay > 0.4 && perStockDay < 0.85, 'news/stock/day ' + perStockDay.toFixed(2));
+  const byCode = {}; r.news.slice().reverse().forEach((n) => (byCode[n.code] = byCode[n.code] || []).push(n));
+  let gaps = [];
+  for (const list of Object.values(byCode)) list.forEach((n, i) => { if (n.kind === 'setup' && list[i + 1]) gaps.push((list[i + 1].t - n.t) / 3600000); });
+  assert.ok(gaps.length > 10 && Math.min(...gaps) >= 4, 'story gap hours min ' + Math.min(...gaps));
+  r.stocks.forEach((s) => { assert.equal(s.shares, 10000); s.history.slice(1).forEach((h) => { const m = (h.t + 9 * 3600000) % DAY / 60000; assert.ok(m >= 540 && m <= 1320 && m % 30 === 0); }); });
+});

@@ -1,16 +1,16 @@
 {
-  "start": "2026-11-17 17:51",
-  "schedule": ["08:00", "17:00", "22:00"],
+  "start": "2026-11-18 14:00",
+  "session": { "open": "09:00", "close": "22:00", "everyMin": 30 },
   "dailyLimitPct": 15,
+  "newsPerStockDay": 0.6,
   "stocks": [
-    { "code": "CCI", "name": "크리티컬 컴퓨터 Inc.", "sector": "컴퓨터", "initial": 500, "vol": 2, "description": "가상의 컴퓨터 하드웨어 기업. 고성능 연산 장비와 서버를 만든다." },
-    { "code": "MUG", "name": "무당 세계관 그룹", "sector": "콘텐츠", "initial": 800, "vol": 1.5, "description": "가상의 콘텐츠 그룹. 여러 세계관 IP를 만들고 운영한다." },
-    { "code": "SAI", "name": "사되 AI", "sector": "인공지능", "initial": 1200, "vol": 3, "description": "가상의 인공지능 기업. AI 모델과 서비스를 개발한다." },
-    { "code": "DER", "name": "다크 에너지 원자로", "sector": "에너지", "initial": 350, "vol": 2.5, "description": "가상의 에너지 기업. 실험적인 차세대 원자로를 연구·운영한다." },
-    { "code": "RIM", "name": "리버수 얼음 광산", "sector": "광업", "initial": 1000, "vol": 1.8, "description": "가상의 광업 기업. 얼음 광산에서 자원을 채굴한다." }
+    { "code": "CCI", "name": "크리티컬 컴퓨터 Inc.", "sector": "컴퓨터", "initial": 500, "vol": 0.6, "shares": 20000, "description": "가상의 컴퓨터 하드웨어 기업. 고성능 연산 장비와 서버를 만든다." },
+    { "code": "MUG", "name": "무당 세계관 그룹", "sector": "콘텐츠", "initial": 800, "vol": 0.45, "shares": 15000, "description": "가상의 콘텐츠 그룹. 여러 세계관 IP를 만들고 운영한다." },
+    { "code": "SAI", "name": "사되 AI", "sector": "인공지능", "initial": 1200, "vol": 0.9, "shares": 25000, "description": "가상의 인공지능 기업. AI 모델과 서비스를 개발한다." },
+    { "code": "DER", "name": "다크 에너지 원자로", "sector": "에너지", "initial": 350, "vol": 0.75, "shares": 30000, "description": "가상의 에너지 기업. 실험적인 차세대 원자로를 연구·운영한다." },
+    { "code": "RIM", "name": "리버수 얼음 광산", "sector": "광업", "initial": 1000, "vol": 0.55, "shares": 12000, "description": "가상의 광업 기업. 얼음 광산에서 자원을 채굴한다." },
+    { "code": "IFD", "name": "이프스 다이나믹스", "sector": "로봇", "initial": 900, "vol": 0.8, "shares": 18000, "description": "가상의 로봇 기업. 사람처럼 걷는 휴머노이드와 공장용 로봇 팔, 배달 로봇을 만든다." }
   ],
-  "events": [
-    { "at": "2026-11-17 19:58", "type": "halt", "reason": "사되 요청: 잠시 시장 중지" }
-  ],
+  "events": [],
   "notices": []
 }

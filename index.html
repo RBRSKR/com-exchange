@@ -189,7 +189,43 @@ const TZ = { timeZone:'Asia/Seoul' };
 const tKST = (ms, o) => new Date(ms).toLocaleString('ko-KR', Object.assign({}, TZ, o || { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false }));
 const dKST = (ms) => new Date(ms).toLocaleDateString('sv-SE', TZ); // YYYY-MM-DD
 const hhmm = (m) => String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
-const schedLabel = () => !S.genesis ? '' : S.genesis.schedule ? '매일 '+S.genesis.schedule.slice().sort((a,b)=>a-b).map(hhmm).join(' · ')+' 갱신' : S.genesis.periodMin+'분마다 갱신';
+const schedLabel = () => { if(!S.genesis) return ''; const sc=S.genesis.schedule; if(!sc) return S.genesis.periodMin+'분마다 갱신';
+  const m=sc.slice().sort((a,b)=>a-b), st=m.length>2?m[1]-m[0]:0;
+  if (m.length>3 && m.every((x,i)=>!i||x-m[i-1]===st)) return '장 '+hhmm(m[0])+'~'+hhmm(m[m.length-1])+' · '+st+'분마다 갱신';
+  return '매일 '+m.map(hhmm).join(' · ')+' 갱신'; };
+const kstMin = (ms) => Math.floor(((ms + 9*36e5) % 864e5) / 6e4);
+function session(){ // real-market style status
+  if (!S.sim) return null; if (S.sim.halted) return { k:'halt', label:'시장 중지' };
+  const sc=S.genesis&&S.genesis.schedule; if(!sc||sc.length<4) return { k:'open', label:'운영 중' };
+  const m=sc.slice().sort((a,b)=>a-b), n=kstMin(Date.now());
+  if (n < m[0]) return { k:'pre', label:'장 시작 전 · '+hhmm(m[0])+' 개장' };
+  if (n > m[m.length-1]) return { k:'closed', label:'장 마감 · 내일 '+hhmm(m[0])+' 개장' };
+  return { k:'open', label:'장중' };
+}
+const fmtD = (n,d) => Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+function fmtCap(n){ if(!(n>0)) return '-'; if(n>=1e8) return fmtD(n/1e8, n>=1e10?0:1)+'억'; if(n>=1e4) return fmt(n/1e4)+'만'; return fmt(n); }
+const kday = (ms) => Math.floor((ms + 9*36e5) / 864e5);
+// COM 종합지수: market-cap weighted, base 1,000 at open; divisor adjusted on new listings so a listing does not move the index
+function computeIndex(){
+  const sim=S.sim; if(!sim) return null;
+  const sh=(s)=>s.shares>0?s.shares:1, ev=[];
+  sim.stocks.forEach((s)=>s.history.forEach((h)=>ev.push({t:h.t,s,p:h.p,k:h.k})));
+  ev.sort((a,b)=>a.t-b.t); if(!ev.length) return null;
+  const last=new Map(); let cap=0, div=0; const series=[];
+  for (let i=0;i<ev.length;){ const t=ev[i].t;
+    for (; i<ev.length && ev[i].t===t; i++){ const e=ev[i];
+      if (!last.has(e.s.code)){ const before = div? cap/div : null; cap += e.p*sh(e.s); last.set(e.s.code,e.p); div = before===null ? cap/1000 : cap/before; }
+      else { cap += (e.p-last.get(e.s.code))*sh(e.s); last.set(e.s.code,e.p); } }
+    series.push({ t, p: cap/div });
+  }
+  const value=series[series.length-1].p, today=kday(Date.now());
+  let prev=series[0].p; for (const x of series){ if (kday(x.t)<today) prev=x.p; }
+  const totalCap = sim.stocks.reduce((a,s)=>a+s.price*(s.shares||0),0);
+  return { code:'COM 종합지수', price:value, history:series, prevClose:prev, change:value-prev, changePct:prev?(value/prev-1)*100:0, totalCap };
+}
+function todayOHLC(s){ const today=kday(Date.now()); const pts=s.history.filter((h)=>kday(h.t)===today && h.k!=='list').map((h)=>h.p);
+  if(!pts.length) return { o:s.prevClose, h:Math.max(s.prevClose,s.price), l:Math.min(s.prevClose,s.price), c:s.price };
+  return { o:pts[0], h:Math.max(...pts), l:Math.min(...pts), c:s.price }; }
 const KIND_LABEL = { setup:'예고', success:'성공', fail:'실패', single:'속보', admin:'특보' };
 const newsTone = (n) => n.effect>0?'up':n.effect<0?'down':'flat';
 function newsItems(list, max, showCode){
@@ -246,27 +282,29 @@ function sparkSVG(s){
   const c = s.change>0?'var(--up)':s.change<0?'var(--down)':'var(--flat)';
   return `<svg class="spark" viewBox="0 0 96 28" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
 }
-function drawChart(s){
-  const box = $('chart'); if (!box) return;
+function drawChart(s, boxId, dec){
+  boxId=boxId||'chart'; dec=dec||0; const nf=(n)=>dec?fmtD(n,dec):fmt(n);
+  const box = $(boxId); if (!box) return;
+  if (boxId==='chart' && S.ctype==='candle' && S.range!=='1D') return drawCandles(s, box);
   const W = box.clientWidth || 600, H = box.clientWidth < 520 ? 230 : 300, pl=8, pr=62, pt=16, pb=26;
   const pts = seriesFor(s, S.range);
   const ps = pts.map((x)=>x.p); let mn=Math.min(...ps), mx=Math.max(...ps);
-  const pad = Math.max(1,(mx-mn)*0.12); mn=Math.max(0,mn-pad); mx=mx+pad;
+  const pad = Math.max(dec?0.01:1,(mx-mn)*0.12); mn=Math.max(0,mn-pad); mx=mx+pad;
   const t0=pts[0].t, t1=pts[pts.length-1].t, ts=Math.max(1,t1-t0);
   const X=(t)=>pl+(t-t0)/ts*(W-pl-pr), Y=(p)=>pt+(1-(p-mn)/(mx-mn))*(H-pt-pb);
   const first=pts[0].p, last=s.price, c = last>first?'var(--up)':last<first?'var(--down)':'var(--flat)';
   let line=''; pts.forEach((x,i)=>{ line += (i? 'L'+X(x.t).toFixed(1)+','+Y(pts[i-1].p).toFixed(1):'M'+X(x.t).toFixed(1)+','+Y(x.p).toFixed(1)); if(i) line+='L'+X(x.t).toFixed(1)+','+Y(x.p).toFixed(1); });
   const area = line + `L${X(t1).toFixed(1)},${H-pb}L${X(t0).toFixed(1)},${H-pb}Z`;
-  let grid=''; for (let i=0;i<=4;i++){ const p=mn+(mx-mn)*i/4, y=Y(p); grid+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${W-pr+8}" y="${y+4}" fill="var(--dim)" font-size="11" font-family="IBM Plex Mono">${fmt(p)}</text>`; }
+  let grid=''; for (let i=0;i<=4;i++){ const p=mn+(mx-mn)*i/4, y=Y(p); grid+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${W-pr+8}" y="${y+4}" fill="var(--dim)" font-size="11" font-family="IBM Plex Mono">${nf(p)}</text>`; }
   let xl=''; for (let i=0;i<=3;i++){ const t=t0+ts*i/3, x=X(t); const lab = ts < 2*864e5 ? tKST(t,{hour:'2-digit',minute:'2-digit',hour12:false}) : tKST(t,{month:'numeric',day:'numeric'}); xl+=`<text x="${x}" y="${H-7}" fill="var(--dim)" font-size="11" text-anchor="${i===0?'start':i===3?'end':'middle'}">${esc(lab)}</text>`; }
   const refY = Y(first);
   box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="height:${H}px" role="img" aria-label="${esc(s.code)} 가격 차트">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".12"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="g${boxId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".12"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
     ${grid}${xl}<line x1="${pl}" x2="${W-pr}" y1="${refY}" y2="${refY}" stroke="var(--muted)" stroke-opacity=".35" stroke-dasharray="1 3"/>
-    <path d="${area}" fill="url(#g)"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>
-    <line id="cx" y1="${pt}" y2="${H-pb}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/><circle id="cdot" r="4.5" fill="${c}" stroke="var(--bg)" stroke-width="2" visibility="hidden"/>
-    <rect x="${pl}" y="0" width="${W-pl-pr}" height="${H}" fill="transparent" id="hit"/></svg><div class="tip" id="tip"></div>`;
-  const svg = box.querySelector('svg'), hit=$('hit'), tip=$('tip'), cx=$("cx"), cd=$("cdot");
+    <path d="${area}" fill="url(#g${boxId})"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>
+    <line id="cx${boxId}" y1="${pt}" y2="${H-pb}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/><circle id="cdot${boxId}" r="4.5" fill="${c}" stroke="var(--bg)" stroke-width="2" visibility="hidden"/>
+    <rect x="${pl}" y="0" width="${W-pl-pr}" height="${H}" fill="transparent" id="hit${boxId}"/></svg><div class="tip" id="tip${boxId}"></div>`;
+  const svg = box.querySelector('svg'), hit=$('hit'+boxId), tip=$('tip'+boxId), cx=$('cx'+boxId), cd=$('cdot'+boxId);
   const real = pts.filter((x)=>x.k!=='carry');
   const move = (ev) => {
     const r = svg.getBoundingClientRect(); const mx = (ev.clientX - r.left) * (W / r.width);
@@ -274,11 +312,33 @@ function drawChart(s){
     const x=X(best.t), y=Y(best.p);
     cx.setAttribute('x1',x); cx.setAttribute('x2',x); cx.setAttribute('visibility','visible'); cd.setAttribute('cx',x); cd.setAttribute('cy',y); cd.setAttribute('visibility','visible');
     const kind = best.k==='admin'?' · 관리자 변경':best.k==='manual'?' · 수동 갱신':best.k==='now'?' · 현재':best.k==='news'?' · 뉴스':'';
-    tip.innerHTML = `<b class="num">${com(best.p)}</b><div class="sub">${esc(tKST(best.t))}${kind}</div>${best.n?`<div style="max-width:220px;white-space:normal;margin-top:4px">${esc(best.n)}</div>`:''}`;
+    tip.innerHTML = `<b class="num">${dec?fmtD(best.p,dec):com(best.p)}</b><div class="sub">${esc(tKST(best.t))}${kind}</div>${best.n?`<div style="max-width:220px;white-space:normal;margin-top:4px">${esc(best.n)}</div>`:''}`;
     tip.style.display='block'; tip.style.left = Math.min(Math.max(x*(r.width/W),70), r.width-70)+'px'; tip.style.top = (y*(r.height/H)-10)+'px';
   };
   const leave = () => { tip.style.display='none'; cx.setAttribute('visibility','hidden'); cd.setAttribute('visibility','hidden'); };
   hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move); hit.addEventListener('pointerleave', leave);
+}
+
+function drawCandles(s, box){
+  const W = box.clientWidth || 600, H = box.clientWidth < 520 ? 230 : 300, pl=8, pr=62, pt=16, pb=26;
+  const from=rangeStart(S.range), days=new Map();
+  let prevC=null;
+  s.history.forEach((h)=>{ const d=kday(h.t); if(!days.has(d)) days.set(d,{d,o:prevC!==null&&h.k!=='list'?prevC:h.p,h:h.p,l:h.p,c:h.p,t:h.t}); const x=days.get(d); if(prevC!==null&&x.o===prevC){ x.h=Math.max(x.h,prevC); x.l=Math.min(x.l,prevC);} x.h=Math.max(x.h,h.p); x.l=Math.min(x.l,h.p); x.c=h.p; prevC=h.p; });
+  const cs=[...days.values()].filter((x)=>x.t>=from || (x.d*864e5-9*36e5)>=from);
+  if(!cs.length){ box.innerHTML='<div class="empty">표시할 일봉이 없습니다.</div>'; return; }
+  let mn=Math.min(...cs.map((x)=>x.l)), mx=Math.max(...cs.map((x)=>x.h)); const pad=Math.max(1,(mx-mn)*0.12); mn=Math.max(0,mn-pad); mx+=pad;
+  const n=cs.length, cw=(W-pl-pr)/Math.max(n,8), bw=Math.max(3,Math.min(18,cw*0.6));
+  const X=(i)=>pl+cw*(i+0.5), Y=(p)=>pt+(1-(p-mn)/(mx-mn))*(H-pt-pb);
+  let g=''; for(let i=0;i<=4;i++){ const p=mn+(mx-mn)*i/4, y=Y(p); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${W-pr+8}" y="${y+4}" fill="var(--dim)" font-size="11" font-family="IBM Plex Mono">${fmt(p)}</text>`; }
+  const step=Math.max(1,Math.ceil(n/6)); cs.forEach((x,i)=>{ if(i%step===0) g+=`<text x="${X(i)}" y="${H-7}" fill="var(--dim)" font-size="11" text-anchor="middle">${esc(tKST(x.t,{month:'numeric',day:'numeric'}))}</text>`; });
+  const bars=cs.map((x,i)=>{ const c=x.c>x.o?'var(--up)':x.c<x.o?'var(--down)':'var(--flat)', yo=Y(x.o), yc=Y(x.c), top=Math.min(yo,yc), hgt=Math.max(1.5,Math.abs(yc-yo));
+    return `<g data-i="${i}"><line x1="${X(i)}" x2="${X(i)}" y1="${Y(x.h)}" y2="${Y(x.l)}" stroke="${c}" stroke-width="1.2"/><rect x="${X(i)-bw/2}" y="${top}" width="${bw}" height="${hgt}" fill="${c}"/></g>`; }).join('');
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="height:${H}px" role="img" aria-label="${esc(s.code)} 일봉 차트">${g}${bars}<rect x="${pl}" y="0" width="${W-pl-pr}" height="${H}" fill="transparent" id="chit"/></svg><div class="tip" id="ctip"></div>`;
+  const svg=box.querySelector('svg'), tip=$('ctip');
+  const mv=(ev)=>{ const r=svg.getBoundingClientRect(); const i=Math.min(n-1,Math.max(0,Math.floor(((ev.clientX-r.left)*(W/r.width)-pl)/cw))); const x=cs[i];
+    tip.innerHTML=`<b>${esc(tKST(x.t,{month:'numeric',day:'numeric'}))}</b><div class="num sub">시 ${fmt(x.o)} · 고 ${fmt(x.h)}<br>저 ${fmt(x.l)} · 종 ${fmt(x.c)}</div>`;
+    tip.style.display='block'; tip.style.left=Math.min(Math.max(X(i)*(r.width/W),70),r.width-70)+'px'; tip.style.top=(Y(x.h)*(r.height/H)-10)+'px'; };
+  $('chit').addEventListener('pointermove',mv); $('chit').addEventListener('pointerdown',mv); $('chit').addEventListener('pointerleave',()=>tip.style.display='none');
 }
 
 /* ---------- discord text ---------- */
@@ -286,7 +346,8 @@ function discordText(){
   const sim=S.sim; if(!sim) return '';
   const lines = sim.stocks.map((s)=>`${s.code.padEnd(5)} ${fmt(s.price).padStart(7)} COM  ${arrow(s.change)} ${pct(s.changePct)}`);
   const fresh = sim.news.filter((n)=>n.t>=sim.slotStart).slice().reverse().map((n)=>`> [${KIND_LABEL[n.kind]||'뉴스'}] ${n.headline} (${n.code} ${arrow(n.price-n.prev)})`);
-  return ['**COM EXCHANGE 시세** · '+tKST(sim.slotStart)+' KST', ...(fresh.length?['', '**뉴스**', ...fresh, '']:[]), '```', ...lines, '```',
+  const ix=computeIndex(), ses=session();
+  return ['**COM EXCHANGE 시세** · '+tKST(sim.slotStart)+' KST'+(ses?' · '+ses.label:''), ...(ix?['COM 종합지수 **'+fmtD(ix.price,2)+'** '+arrow(ix.change)+' '+pct(ix.changePct)]:[]), ...(fresh.length?['', '**뉴스**', ...fresh, '']:[]), '```', ...lines, '```',
     sim.halted ? '현재 시장 운영이 중지되어 있습니다.' : '다음 갱신 '+tKST(sim.nextUpdate,{hour:'2-digit',minute:'2-digit',hour12:false}),
     '-# 가상 시장입니다. 매수·매도·입출금은 디스코드에서 사되에게 신청하세요. (자동 체결·자동 송금 없음)'].join('\n');
 }
@@ -296,8 +357,7 @@ function setStatus(){
   const el=$('mstatus');
   if (S.err || S.simErr) { el.className='pill halt'; el.innerHTML='<span class="dot"></span><span>연결 오류</span>'; return; }
   if (!S.sim) { el.className='pill wait'; el.innerHTML='<span class="dot"></span><span>연결 중</span>'; return; }
-  if (S.sim.halted) { el.className='pill halt'; el.innerHTML='<span class="dot"></span><span>시장 중지</span>'; return; }
-  el.className='pill'; el.innerHTML='<span class="dot"></span><span>운영 중</span>';
+  const ses=session(); el.className='pill'+(ses.k==='halt'?' halt':ses.k==='open'?'':' wait'); el.innerHTML='<span class="dot"></span><span>'+esc(ses.label)+'</span>';
 }
 function renderTape(){
   const t=$('tape'); if(!S.sim){ t.innerHTML='<div class="in sub">'+(S.err?esc(S.err):'시세를 불러오는 중…')+'</div>'; return; }
@@ -321,6 +381,11 @@ function viewHome(){
   if (blk) return h + blk;
   const up = sim.stocks.filter((s)=>s.change>0).length, dn = sim.stocks.filter((s)=>s.change<0).length;
   const left = Math.max(0, sim.nextUpdate - Date.now());
+  const ix = computeIndex();
+  if (ix) h += `<section class="card" style="margin-top:24px"><div class="card-h"><div><div class="sub">COM 종합지수 · 시가총액 가중 · 개장일 1,000 기준</div>
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:4px"><span class="num" style="font-size:28px;font-weight:500">${fmtD(ix.price,2)}</span><span class="num ${dir(ix.change)}" style="font-weight:600">${arrow(ix.change)} ${fmtD(Math.abs(ix.change),2)} (${pct(ix.changePct)})</span></div></div>
+      <div style="text-align:right"><div class="sub">시장 시가총액</div><div class="num" style="font-size:16px">${fmtCap(ix.totalCap)} COM</div></div></div>
+    <div style="padding:4px 4px 0"><div class="chart" id="ixchart"></div></div></section>`;
   h += `<div class="strip">
     <div><span class="k">마지막 갱신</span><span class="v num">${esc(tKST(sim.slotStart,{hour:'2-digit',minute:'2-digit',hour12:false}))}</span></div>
     <div><span class="k">다음 갱신</span><span class="v num" id="cd">${sim.halted?'중지':left>0?fmtLeft(left):'반영 중'}</span></div>
@@ -329,10 +394,10 @@ function viewHome(){
     <div><span class="k">종목</span><span class="v num">${sim.stocks.length}</span></div></div>
     <div class="slotbar" title="다음 갱신까지 경과"><i id="slotfill" style="width:${sim.halted?0:((Date.now()-sim.slotStart)/(sim.nextUpdate-sim.slotStart)*100).toFixed(2)}%"></i></div>`;
   h += `<div class="grid2"><section class="card"><div class="card-h"><h2>상장 종목</h2><span class="sub">행을 누르면 상세</span></div>
-    <table><thead><tr><th>종목</th><th>현재가 (COM)</th><th>전일 대비</th><th class="hide-m">24시간</th><th class="hide-m">회당 변동폭</th></tr></thead><tbody>
+    <table><thead><tr><th>종목</th><th>현재가 (COM)</th><th>전일 대비</th><th class="hide-m">오늘</th><th class="hide-m">시가총액</th></tr></thead><tbody>
     ${sim.stocks.map((s)=>`<tr class="row" data-go="${s.code}"><td><div class="tk">${s.code}</div><div class="nm">${esc(s.name)}</div></td>
       <td><span class="pr num">${fmt(s.price)}</span></td><td><span class="chg num ${dir(s.change)}">${pct(s.changePct)}</span></td>
-      <td class="hide-m">${sparkSVG(s)}</td><td class="hide-m num sub">±${s.vol}%</td></tr>`).join('')}
+      <td class="hide-m">${sparkSVG(s)}</td><td class="hide-m num sub">${fmtCap(s.price*(s.shares||0))}</td></tr>`).join('')}
     </tbody></table></section>
     <div style="display:flex;flex-direction:column;gap:24px">
     <section class="card"><div class="card-h"><h2>시장 뉴스</h2><span class="sub">최근 ${Math.min(8,sim.news.length)}건</span></div><div class="news scroll" style="max-height:480px">${newsItems(sim.news,8,true)}</div></section>
@@ -353,12 +418,15 @@ function viewStock(code){
   <div class="dhead"><div><div class="sub">${esc(s.sector||'기타')} · ${esc(s.name)}</div><div class="dcode">${s.code}</div>
     <div class="dprice num" style="margin-top:6px">${fmt(s.price)}<small>COM</small></div>
     <div class="num ${dir(s.change)}" style="font-weight:600;margin-top:4px">${arrow(s.change)} ${fmt(Math.abs(s.change))} (${pct(s.changePct)}) <span class="sub" style="font-weight:400">전일 종가 ${com(s.prevClose)} 대비</span></div></div>
-    <div class="seg" id="rseg">${['1D','1W','1M','ALL'].map((r)=>`<button data-r="${r}" class="${S.range===r?'on':''}">${{'1D':'1일','1W':'1주','1M':'1개월','ALL':'전체'}[r]}</button>`).join('')}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg" id="cseg"><button data-c="line" class="${S.ctype!=='candle'?'on':''}">라인</button><button data-c="candle" class="${S.ctype==='candle'?'on':''}">일봉</button></div><div class="seg" id="rseg">${['1D','1W','1M','ALL'].map((r)=>`<button data-r="${r}" class="${S.range===r?'on':''}">${{'1D':'1일','1W':'1주','1M':'1개월','ALL':'전체'}[r]}</button>`).join('')}</div></div></div>
   <section class="card" style="margin-top:16px;padding:8px 4px 4px"><div class="chart" id="chart"></div></section>
   <div class="grid2">
     <section class="card"><div class="card-h"><h2>기업 정보</h2>${S.sim.halted?'<span class="badge err">시장 중지</span>':''}</div><div class="card-b">
       <p style="margin:0 0 16px">${esc(s.description||'등록된 기업 설명이 없습니다.')}</p>
       <div class="kv">
+        <div><span>시가 · 고가 · 저가 (오늘)</span><b class="num" style="white-space:nowrap">${(()=>{const o=todayOHLC(s);return `${fmt(o.o)} · <span class="up">${fmt(o.h)}</span> · <span class="down">${fmt(o.l)}</span>`;})()}</b></div>
+        <div><span>시가총액</span><b class="num">${fmtCap(s.price*(s.shares||0))} COM</b></div>
+        <div><span>발행 주식 수</span><b class="num">${s.shares?fmt(s.shares)+'주':'-'}</b></div>
         <div><span>최초 상장가</span><b class="num">${com(s.initial)}</b></div>
         <div><span>회당 변동폭</span><b class="num">±${s.vol}%</b></div>
         <div><span>오늘 가격 제한 범위</span><b class="num">${fmt(s.limitLo)} ~ ${fmt(s.limitHi)}</b></div>
@@ -502,6 +570,7 @@ function render(){
     + `<div class="foot">COM EXCHANGE v0.2 · 커뮤니티용 가상 증권거래소 · 모든 종목은 실제 기업이 아닌 가상 종목입니다.<br>가격은 종목별 설정 범위의 균등 난수와 시장 뉴스로 ${schedLabel()||'정해진 시각에 갱신'}되는 공통 규칙에 따라 계산되며, 실제 화폐·투자 상품과 무관합니다. 시각은 한국 표준시(KST) 기준입니다.</div>`;
   setStatus(); renderTape(); bind();
   if (r.name==='stock' && stock(r.code)) drawChart(stock(r.code));
+  if (r.name==='home' && $('ixchart')) { const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); }
   if (keep) restoreInputs(keep);
 }
 const INPUTS=['wCode','wEff','wHead','aReason','pCode','pPrice','pReason','eCode','eName','eSector','eVol','eDesc','lCode','lName','lSector','lInit','lVol','lDesc','nTitle','nBody','nPin','tSide','tQty'];
@@ -513,7 +582,8 @@ function bind(){
   document.querySelectorAll('[data-go]').forEach((el)=>el.onclick=()=>{ location.hash=el.dataset.go; });
   const cd=$('copyD'); if(cd) cd.onclick=()=>copyText(discordText());
   const setup=$('setup'); if(setup) setup.onclick=setupMarket;
-  document.querySelectorAll('#rseg button').forEach((b)=>b.onclick=()=>{ S.range=b.dataset.r; render(); });
+  document.querySelectorAll('#rseg button').forEach((b)=>b.onclick=()=>{ S.range=b.dataset.r; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
+  document.querySelectorAll('#cseg button').forEach((b)=>b.onclick=()=>{ S.ctype=b.dataset.c; if(S.ctype==='candle'&&S.range==='1D') S.range='1M'; render(); });
   const tq=$('tQty'), ts=$('tSide'), tp=$('tPrev'), tc=$('tCopy');
   if (tc){ const s=stock(S.route.code); const upd=()=>{ const q=Math.max(1,Math.floor(+tq.value||1)); tp.textContent=`예상 금액 ${com(q*s.price)} (현재가 기준, 참고용)`; };
     tq.oninput=upd; ts.onchange=upd; upd();
@@ -623,7 +693,7 @@ setInterval(()=>{
   else if (S.sim && Date.now() >= S.sim.nextUpdate){ recompute(); if(!(S.route.name==='admin' && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render(); else renderTape(); toast('새 시세가 반영되었습니다.'); }
   else if (S.sim && $('cd') && !S.sim.halted){ $('cd').textContent = fmtLeft(S.sim.nextUpdate-Date.now()); const f=$('slotfill'); if(f) f.style.width=((Date.now()-S.sim.slotStart)/(S.sim.nextUpdate-S.sim.slotStart)*100).toFixed(2)+'%'; }
 }, 1000);
-let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); },150); });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.route.name==='stock'&&stock(S.route.code)) drawChart(stock(S.route.code)); if(S.route.name==='home'&&$('ixchart')){ const ix=computeIndex(); if(ix) drawChart(ix,'ixchart',2); } },150); });
 init();
 </script>
 </body>
