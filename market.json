@@ -155,6 +155,13 @@
       "type": "set_vol",
       "code": "IFD",
       "vol": 0.56
+    },
+    {
+      "at": "2026-11-18 16:48:48",
+      "type": "news",
+      "code": "RIM",
+      "headline": "얼음 광산에서 이물질 없는 얼음 발견이되었습니다!",
+      "effect": 10
     }
   ],
   "notices": []
